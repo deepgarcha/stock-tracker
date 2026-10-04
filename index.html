@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: full-height app. Top bar holds the tab strip; below it the active tab's list on the left and the selected ticker filling the rest. Stacks on phones. */
+/* Layout: full-height three-pane desk. Tab strip in the top bar; the open tab's list on the left, the selected ticker's chart in the middle, key stats and news on the right. Panes stack as the window narrows. */
 :root {
   --bg: #f3f5f7;
   --panel: #ffffff;
@@ -44,10 +44,12 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; }
 button:hover { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 600; }
 button.danger { color: var(--down); }
-button:focus-visible, input:focus-visible, select:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, .row:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input, select { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+a { color: inherit; }
 
 .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 
@@ -66,18 +68,24 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
 .pill { font: 500 0.7rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
 .pill.live { color: var(--up); background: none; }
 .pill.demo { color: var(--warn); background: var(--warn-soft); }
+button.pill { cursor: pointer; }
 .icon-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; }
 .icon-btn svg { width: 18px; height: 18px; }
 
 /* Desk */
-.desk { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); min-height: 0; }
-.side { display: grid; grid-template-rows: auto minmax(0, 1fr); border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
+.desk { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); min-height: 0; }
+.side { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
 .search { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); position: relative; }
 .search input { flex: 1; }
 .rows { overflow-y: auto; min-height: 0; }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) 76px auto; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.side-foot { padding: 8px 16px; border-top: 1px solid var(--line); font-size: 0.75rem; color: var(--muted); }
+.row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 64px auto; align-items: center; gap: 8px; padding: 10px 14px 10px 8px; border-bottom: 1px solid var(--line); cursor: pointer; background: var(--panel); user-select: none; }
 .row:hover { background: var(--bg); }
 .row.sel { background: var(--accent-soft); }
+.row.dragging { position: relative; z-index: 2; box-shadow: 0 8px 24px rgba(0,0,0,.18); background: var(--panel); cursor: grabbing; }
+.grip { color: var(--muted); cursor: grab; touch-action: none; display: grid; place-items: center; height: 100%; opacity: .55; }
+.row:hover .grip, .row.dragging .grip { opacity: 1; }
+.grip svg { width: 10px; height: 16px; }
 .sym { font: 700 0.95rem/1.2 var(--display); display: flex; align-items: center; gap: 6px; }
 .bell { font: 500 0.62rem/1 var(--mono); color: var(--warn); border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px; }
 .bell.hit { background: var(--warn); color: var(--panel); }
@@ -85,11 +93,11 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
 .px { text-align: right; font: 500 0.92rem/1.2 var(--mono); font-variant-numeric: tabular-nums; }
 .chg { font: 400 0.76rem/1.3 var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
 .up { color: var(--up); } .down { color: var(--down); }
-.spark { width: 76px; height: 26px; display: block; }
+.spark { width: 64px; height: 26px; display: block; }
 .empty { padding: 28px 16px; color: var(--muted); font-size: 0.9rem; }
 
 .results { position: absolute; left: 16px; right: 16px; top: calc(100% - 6px); z-index: 4; margin: 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.14); max-height: 340px; overflow-y: auto; }
-.results li { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+.results li { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
 .results li[aria-selected="true"], .results li:hover { background: var(--accent-soft); }
 .results .rs { font: 700 0.9rem/1.2 var(--display); }
 .results .rn { font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -97,19 +105,30 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
 .results .rmsg { display: block; color: var(--muted); font-size: 0.85rem; cursor: default; }
 .results .rmsg:hover { background: none; }
 
-.detail { display: flex; flex-direction: column; gap: 18px; padding: 20px 24px; min-width: 0; min-height: 0; overflow-y: auto; }
+/* Middle + right */
+.content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); min-height: 0; }
+.center { display: flex; flex-direction: column; gap: 16px; padding: 20px 24px; min-width: 0; min-height: 0; overflow-y: auto; }
+.right { border-left: 1px solid var(--line); background: var(--panel); padding: 20px; overflow-y: auto; min-height: 0; display: grid; align-content: start; gap: 24px; }
 .dhead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; }
 .dname { font: 800 1.9rem/1 var(--display); margin: 0; }
 .big { font: 600 2.2rem/1 var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
-.chart-box { flex: 1 1 auto; min-height: 260px; position: relative; }
+.ranges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ranges button { border: 0; background: none; padding: 6px 10px; border-radius: 6px; font: 500 0.8rem/1 var(--mono); color: var(--muted); }
+.ranges button:hover { color: var(--fg); background: var(--bg); }
+.ranges button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.period { margin-left: auto; font: 0.82rem var(--mono); font-variant-numeric: tabular-nums; }
+.chart-box { flex: 1 1 auto; min-height: 300px; position: relative; touch-action: pan-y; }
 .chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .chart text { fill: var(--muted); font: 11px var(--mono); }
+.chart .hover-label { fill: var(--fg); font-weight: 500; }
+.chart-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); font-size: 0.9rem; padding: 16px; }
+.chart-msg button { margin-top: 10px; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .stat { border-top: 1px solid var(--line); padding-top: 6px; }
 .k { font: 500 0.68rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .stat .v { font: 500 1rem/1.6 var(--mono); font-variant-numeric: tabular-nums; }
 .lower { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
-.lower h2 { font: 700 0.95rem/1.2 var(--display); margin: 0 0 10px; }
+.h2 { font: 700 0.95rem/1.2 var(--display); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
 .alert-form { display: flex; flex-wrap: wrap; gap: 8px; }
 .alert-form input { width: 120px; }
 .alert-list { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
@@ -122,17 +141,36 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
 .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .remove { margin-top: 12px; }
 
+/* Right panel */
+.tag { font: 500 0.62rem/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); border-radius: 4px; padding: 3px 5px; }
+.kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 0; }
+.kv dt, .kv dd { margin: 0; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 0.86rem; }
+.kv dt { color: var(--muted); }
+.kv dd { font: 500 0.86rem var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.kv dd a { color: var(--accent); font-family: var(--body); }
+.news { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.news li { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.news li:first-child { padding-top: 0; }
+.news a { font-weight: 600; font-size: 0.9rem; line-height: 1.35; text-decoration: none; }
+.news a:hover { color: var(--accent); text-decoration: underline; }
+.news .meta { font: 0.72rem var(--mono); color: var(--muted); }
+.news p { margin: 0; font-size: 0.82rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.note { font-size: 0.85rem; color: var(--muted); margin: 0; }
+.note a { color: var(--accent); }
+.skeleton { height: 12px; border-radius: 4px; background: var(--bg); margin: 10px 0; }
+
 /* Settings drawer */
 .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 10; display: flex; justify-content: flex-end; }
-.drawer { width: min(440px, 100%); height: 100%; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: calc(18px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px)); display: grid; align-content: start; gap: 24px; }
+.drawer { width: min(460px, 100%); height: 100%; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: calc(18px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px)); display: grid; align-content: start; gap: 24px; }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; }
 .drawer-head h2 { font: 800 1.2rem/1 var(--display); margin: 0; }
 .drawer section { display: grid; gap: 10px; }
 .drawer h3 { font: 700 0.95rem/1.2 var(--display); margin: 0; display: flex; align-items: center; gap: 8px; }
 .drawer p { margin: 0; font-size: 0.87rem; color: var(--muted); }
 .drawer a { color: var(--accent); }
-.key-form { display: flex; flex-wrap: wrap; gap: 8px; }
-.key-form input { flex: 1 1 100%; font-family: var(--mono); }
+.drawer label { font-size: 0.82rem; font-weight: 600; display: grid; gap: 4px; }
+.drawer label input { font-family: var(--mono); font-weight: 400; }
+.key-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .tab-edit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .tab-edit .meta { grid-column: 1 / -1; font-size: 0.78rem; color: var(--muted); margin-top: -4px; }
 
@@ -142,7 +180,14 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
 @keyframes fu { from { color: var(--up); } }
 @keyframes fd { from { color: var(--down); } }
 
-@media (max-width: 860px) {
+@media (max-width: 1180px) {
+  .content { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .center, .right { overflow: visible; }
+  .center > * { flex-shrink: 0; }
+  .chart-box { flex: none; height: 380px; min-height: 0; }
+  .right { border-left: 0; border-top: 1px solid var(--line); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px 32px; }
+}
+@media (max-width: 760px) {
   .app { height: auto; min-height: 100%; }
   .top { flex-wrap: wrap; gap: 0 12px; padding-top: 12px; }
   .tabs { order: 3; flex-basis: 100%; }
@@ -150,11 +195,13 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
   .desk { grid-template-columns: minmax(0, 1fr); }
   .side { border-right: 0; border-bottom: 1px solid var(--line); }
   .rows { max-height: 46vh; }
-  .detail { padding: 18px 16px; overflow: visible; }
-  .chart-box { flex: none; height: 260px; }
+  .content { overflow: visible; }
+  .center { padding: 18px 16px; min-height: 0; }
+  .right { padding: 18px 16px; }
+  .chart-box { flex: none; height: 280px; min-height: 0; }
   .lower { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 520px) { .big { text-align: left; } .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .big { font-size: 1.8rem; } }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .big { font-size: 1.8rem; text-align: left; } }
 </style>
 </head><body>
 <div class="app">
@@ -162,7 +209,7 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     <h1>Ticker Desk</h1>
     <nav id="tabs" class="tabs" role="tablist" aria-label="Stock groups"></nav>
     <div class="top-right">
-      <span id="srcPill" class="pill demo">Demo</span>
+      <button id="srcPill" class="pill demo" type="button">Demo</button>
       <button id="settingsBtn" class="icon-btn" type="button" aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
@@ -177,8 +224,12 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
         <ul id="results" class="results" role="listbox" hidden></ul>
       </form>
       <div id="rows" class="rows"></div>
+      <div class="side-foot">Drag the grip to reorder, or press Alt + ↑/↓ on a stock.</div>
     </aside>
-    <section id="detail" class="detail" aria-live="polite"></section>
+    <div class="content">
+      <section id="center" class="center" aria-label="Chart"></section>
+      <aside id="right" class="right" aria-label="Key stats and news"></aside>
+    </div>
   </main>
 </div>
 
@@ -187,12 +238,21 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     <div class="drawer-head"><h2 id="settingsTitle">Settings</h2><button id="closeSettings" class="icon-btn" type="button" aria-label="Close settings">✕</button></div>
 
     <section>
-      <h3>Data source <span id="srcPill2" class="pill demo">Demo</span></h3>
-      <p>Paste a free <a href="https://finnhub.io/register" target="_blank" rel="noopener">Finnhub</a> API key for real quotes and full company search (free tier: 60 requests a minute, US stocks). The key is saved in this browser only. Without a key, prices are simulated.</p>
-      <form id="keyForm" class="key-form">
-        <input id="keyInput" type="password" placeholder="Finnhub API key" autocomplete="off">
-        <button class="primary" type="submit">Use live prices</button>
-        <button id="demoBtn" type="button">Use demo data</button>
+      <h3>Data sources <span id="srcPill2" class="pill demo">Demo</span></h3>
+      <p>Both keys are free and are saved in this browser only. Without keys, everything is simulated.</p>
+      <form id="keyForm" style="display:grid;gap:12px">
+        <label>Finnhub key · live prices, company search, key stats and news
+          <input id="keyInput" type="password" placeholder="Finnhub API key" autocomplete="off">
+        </label>
+        <p>Sign up at <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io</a>. Free plan: 60 requests a minute.</p>
+        <label>Twelve Data key · history charts (1D to All)
+          <input id="tdKeyInput" type="password" placeholder="Twelve Data API key" autocomplete="off">
+        </label>
+        <p>Sign up at <a href="https://twelvedata.com/register" target="_blank" rel="noopener">twelvedata.com</a>. Free plan: 800 requests a day, 8 a minute. Finnhub's free plan doesn't include price history, so charts use this one.</p>
+        <div class="key-actions">
+          <button class="primary" type="submit">Save and go live</button>
+          <button id="demoBtn" type="button">Use demo data</button>
+        </div>
       </form>
     </section>
 
@@ -240,6 +300,22 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
   const NAME_OF = Object.fromEntries(COMPANIES);
 
   const uid = () => Math.random().toString(36).slice(2, 9);
+  const DAY = 864e5;
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const monthsAgo = (m) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d; };
+  const jan1 = () => new Date(new Date().getFullYear(), 0, 1);
+
+  // Chart ranges. `td` is the Twelve Data request; `demo` shapes the simulated series.
+  const RANGES = [
+    { id: "1D",  td: { interval: "5min", outputsize: 80 },  demo: { kind: "intraday" } },
+    { id: "5D",  td: { interval: "30min", outputsize: 70 }, demo: { kind: "days", days: 5, perDay: 13, vol: 0.0035 } },
+    { id: "1M",  td: { interval: "1h", outputsize: 160 },   demo: { kind: "days", days: 22, perDay: 7, vol: 0.005 } },
+    { id: "6M",  td: { interval: "1day", start: () => monthsAgo(6) }, demo: { kind: "daily", from: () => monthsAgo(6), vol: 0.016 } },
+    { id: "YTD", td: { interval: "1day", start: jan1 },     demo: { kind: "daily", from: jan1, vol: 0.016 } },
+    { id: "1Y",  td: { interval: "1day", start: () => monthsAgo(12) }, demo: { kind: "daily", from: () => monthsAgo(12), vol: 0.016 } },
+    { id: "5Y",  td: { interval: "1week", start: () => monthsAgo(60) }, demo: { kind: "weekly", from: () => monthsAgo(60), vol: 0.035 } },
+    { id: "All", td: { interval: "1month", outputsize: 5000 }, demo: { kind: "monthly", from: () => new Date(1996, 0, 1), vol: 0.075 } }
+  ];
 
   // Tabs: load saved ones, or start with two example groups (and keep any older single watchlist).
   function loadTabs() {
@@ -259,31 +335,51 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     activeTab: store.get("activeTab", null),
     names: Object.assign({}, store.get("names", {})),
     alerts: store.get("alerts", {}),
+    range: store.get("range", "YTD"),
     selected: null,
     key: store.get("key", ""),
+    tdKey: store.get("tdkey", ""),
     mode: "demo",
-    quotes: {},          // sym -> { price, open, high, low, prev, hist: [{t, p}] }
+    quotes: {},          // sym -> { price, open, high, low, prev, hist: [{t, p}] }  (hist = today's ticks)
+    history: {},         // `${sym}|${range}|${source}` -> { status, points: [{t, p}], error }
+    info: {},            // sym -> { status, metric, profile, news, newsStatus }
     addingTab: false,
     confirmDelete: null
   };
+  if (!RANGES.some((r) => r.id === state.range)) state.range = "YTD";
   if (!state.tabs.some((t) => t.id === state.activeTab)) state.activeTab = state.tabs[0].id;
 
   const $ = (id) => document.getElementById(id);
-  const fmt = (n) => n == null || isNaN(n) ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (n, d = 2) => n == null || isNaN(n) ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
   const sign = (n) => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const big = (n) => { if (n == null || isNaN(n)) return "—"; const a = Math.abs(n); return a >= 1e12 ? fmt(n / 1e12) + "T" : a >= 1e9 ? fmt(n / 1e9) + "B" : a >= 1e6 ? fmt(n / 1e6) + "M" : fmt(n, 0); };
+  const pct = (n) => n == null || isNaN(n) ? "—" : fmt(n) + "%";
   const tab = () => state.tabs.find((t) => t.id === state.activeTab) || state.tabs[0];
   const allSymbols = () => [...new Set(state.tabs.flatMap((t) => t.symbols))];
-  const nameOf = (sym) => state.names[sym] || NAME_OF[sym] || "";
+  const nameOf = (sym) => state.names[sym] || NAME_OF[sym] || state.info[sym]?.profile?.name || "";
   const saveTabs = () => { store.set("tabs", state.tabs); store.set("activeTab", state.activeTab); };
+  const live = () => state.mode === "live";
   state.selected = tab()?.symbols[0] || null;
 
-  // ---------- Demo feed: one simulated session of 5-minute points, then live ticks ----------
-  function seedDemo(sym) {
-    if (state.quotes[sym]) return;
+  // Deterministic random numbers, so simulated history and stats stay put between redraws.
+  function rng(seedStr) {
+    let h = 1779033703 ^ seedStr.length;
+    for (let i = 0; i < seedStr.length; i++) { h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+    let a = h >>> 0;
+    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const gauss = (r) => { const u = r() || 1e-9, v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+  // ---------- Demo feed ----------
+  function demoBase(sym) {
     let base = DEMO_BASE[sym];
     if (!base) { let h = 0; for (const c of sym) h = (h * 31 + c.charCodeAt(0)) % 997; base = 20 + h / 3; }
-    const prev = base;
+    return base;
+  }
+  function seedDemo(sym) {
+    if (state.quotes[sym]) return;
+    const prev = demoBase(sym);
     const start = new Date(); start.setHours(9, 30, 0, 0);
     const now = Date.now();
     let p = prev * (1 + (Math.random() - 0.5) * 0.01);
@@ -303,12 +399,46 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     }
   }
 
-  // ---------- Live feed: Finnhub /quote polling for the open tab ----------
-  async function fetchQuote(sym) {
-    const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(state.key)}`);
+  // Simulated history ending at today's previous close, built backwards from it.
+  function demoHistory(sym, range) {
+    const cfg = RANGES.find((r) => r.id === range).demo;
+    const r = rng(sym + "|" + range);
+    const end = state.quotes[sym]?.prev ?? demoBase(sym);
+    const times = [];
+    const isWeekday = (d) => d.getDay() % 6 !== 0;
+    const today = new Date(); today.setHours(16, 0, 0, 0);
+    if (cfg.kind === "days") {
+      const days = [];
+      for (let d = new Date(today.getTime() - DAY); days.length < cfg.days; d = new Date(d.getTime() - DAY)) if (isWeekday(d)) days.unshift(d);
+      const step = 390 / cfg.perDay;
+      for (const d of days) for (let i = 0; i < cfg.perDay; i++) { const t = new Date(d); t.setHours(9, 30, 0, 0); times.push(t.getTime() + i * step * 60e3); }
+    } else {
+      const from = cfg.from();
+      const step = cfg.kind === "daily" ? DAY : cfg.kind === "weekly" ? 7 * DAY : 0;
+      if (cfg.kind === "monthly") { for (let d = new Date(from); d < today; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) times.push(d.getTime()); }
+      else for (let t = from.getTime(); t < today.getTime() - DAY / 2; t += step) { const d = new Date(t); if (cfg.kind !== "daily" || isWeekday(d)) times.push(t); }
+    }
+    const drift = cfg.vol * cfg.vol / 2 + cfg.vol * 0.05;
+    const pts = new Array(times.length);
+    let p = end;
+    for (let i = times.length - 1; i >= 0; i--) {
+      pts[i] = { t: times[i], p };
+      p = Math.max(0.5, p / (1 + drift + cfg.vol * gauss(r)));
+    }
+    return pts;
+  }
+
+  // ---------- Finnhub: quotes, profile, metrics, news ----------
+  async function finnhub(path, params) {
+    const qs = new URLSearchParams({ ...params, token: state.key });
+    const r = await fetch(`https://finnhub.io/api/v1/${path}?${qs}`);
     if (r.status === 401 || r.status === 403) throw new Error("key");
+    if (r.status === 429) throw new Error("rate");
     if (!r.ok) throw new Error("http " + r.status);
-    const d = await r.json();
+    return r.json();
+  }
+  async function fetchQuote(sym) {
+    const d = await finnhub("quote", { symbol: sym });
     if (!d || !d.c) throw new Error("nosym");
     const q = state.quotes[sym] || (state.quotes[sym] = { hist: [] });
     Object.assign(q, { open: d.o, high: d.h, low: d.l, prev: d.pc });
@@ -316,10 +446,11 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
   }
   async function liveTick(syms) {
     for (const sym of syms) {
-      if (state.mode !== "live") return;
+      if (!live()) return;
       try { await fetchQuote(sym); }
       catch (e) {
         if (e.message === "nosym") { state.quotes[sym] ||= { hist: [] }; state.quotes[sym].missing = true; continue; }
+        if (e.message === "rate") return;
         fallBackToDemo(e.message === "key" ? "Finnhub rejected that API key." : "Live quotes couldn't be reached.");
         return;
       }
@@ -327,6 +458,70 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
   }
   // Only the open tab is polled, so the free 60 calls/min limit covers tabs of up to about 15 stocks.
   const liveSymbols = () => [...new Set(tab().symbols.concat(state.selected ? [state.selected] : []))];
+
+  async function loadInfo(sym) {
+    if (state.info[sym]?.status === "ok" || state.info[sym]?.status === "loading") return;
+    if (!live()) { state.info[sym] = { status: "demo" }; return; }
+    const info = state.info[sym] = { status: "loading", newsStatus: "loading" };
+    renderRight();
+    const to = new Date(), from = new Date(Date.now() - 14 * DAY);
+    const [m, p, n] = await Promise.allSettled([
+      finnhub("stock/metric", { symbol: sym, metric: "all" }),
+      finnhub("stock/profile2", { symbol: sym }),
+      finnhub("company-news", { symbol: sym, from: iso(from), to: iso(to) })
+    ]);
+    if (state.info[sym] !== info) return;
+    info.metric = m.status === "fulfilled" ? (m.value?.metric || {}) : null;
+    info.profile = p.status === "fulfilled" ? (p.value || {}) : null;
+    info.news = n.status === "fulfilled" && Array.isArray(n.value) ? n.value.sort((a, b) => b.datetime - a.datetime).slice(0, 12) : null;
+    info.status = info.metric || info.profile ? "ok" : "error";
+    info.newsStatus = info.news ? "ok" : "error";
+    if (info.profile?.name && !state.names[sym]) { state.names[sym] = info.profile.name; store.set("names", state.names); }
+    if (sym === state.selected) { renderRight(); renderCenter(); }
+    renderRows();
+  }
+
+  // ---------- Twelve Data: price history ----------
+  const histKey = (sym, range) => `${sym}|${range}|${live() && state.tdKey ? "td" : live() ? "none" : "demo"}`;
+  async function loadHistory(sym, range) {
+    const k = histKey(sym, range);
+    const h = state.history[k];
+    if (h && (h.status === "loading" || (h.status === "ok" && Date.now() - h.at < (range === "1D" || range === "5D" ? 5 * 60e3 : 60 * 60e3)))) return;
+    if (k.endsWith("|demo")) { state.history[k] = { status: "ok", points: range === "1D" ? null : demoHistory(sym, range), at: Date.now() }; return; }
+    if (k.endsWith("|none")) { state.history[k] = { status: range === "1D" ? "ok" : "needkey", points: null, at: Date.now() }; return; }
+    const entry = state.history[k] = { status: "loading" };
+    const cfg = RANGES.find((r) => r.id === range).td;
+    const qs = new URLSearchParams({ symbol: sym, interval: cfg.interval, apikey: state.tdKey, order: "asc" });
+    if (cfg.start) qs.set("start_date", iso(cfg.start())); else qs.set("outputsize", cfg.outputsize);
+    if (cfg.start) qs.set("outputsize", 5000);
+    try {
+      const r = await fetch(`https://api.twelvedata.com/time_series?${qs}`);
+      const d = await r.json();
+      if (d.status === "error") throw new Error(d.code === 401 ? "Twelve Data rejected that API key." : d.code === 429 ? "Twelve Data's free limit was reached (8 charts a minute). Try again in a minute." : d.message || "No history for this symbol.");
+      let pts = (d.values || []).map((v) => ({ t: new Date(v.datetime.replace(" ", "T")).getTime(), p: +v.close })).filter((x) => !isNaN(x.p));
+      pts.sort((a, b) => a.t - b.t);
+      if (range === "1D" && pts.length) { const lastDay = new Date(pts[pts.length - 1].t).toDateString(); pts = pts.filter((x) => new Date(x.t).toDateString() === lastDay); }
+      Object.assign(entry, { status: pts.length ? "ok" : "error", points: pts, error: pts.length ? "" : "No history for this symbol.", at: Date.now() });
+    } catch (e) {
+      Object.assign(entry, { status: "error", error: e.message === "Failed to fetch" ? "Couldn't reach Twelve Data from this page." : e.message, at: Date.now() - 50 * 60e3 });
+    }
+    if (sym === state.selected && range === state.range) drawChart();
+  }
+
+  // Series to draw for the selected stock and range, with the latest price appended.
+  function seriesFor(sym, range) {
+    const q = state.quotes[sym] || {};
+    const h = state.history[histKey(sym, range)];
+    if (!h || h.status === "loading") return { status: "loading" };
+    if (h.status !== "ok") return { status: h.status, error: h.error };
+    let pts = h.points;
+    if (range === "1D" && (!pts || !pts.length)) pts = q.hist || [];
+    pts = (pts || []).slice();
+    const weekday = new Date().getDay() % 6 !== 0;
+    if (q.price != null && pts.length && range !== "1D" && weekday) pts.push({ t: Date.now(), p: q.price });
+    else if (q.price != null && range === "1D" && h.points?.length) pts.push({ t: Date.now(), p: q.price });
+    return { status: "ok", points: pts };
+  }
 
   function update(sym, price) {
     const q = state.quotes[sym]; if (!q) return;
@@ -355,34 +550,34 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
 
   // ---------- Mode switching ----------
   let timer = null;
+  function resetData() { state.quotes = {}; state.history = {}; state.info = {}; }
   function startDemo() {
     clearInterval(timer);
     state.mode = "demo";
-    state.quotes = {};
+    resetData();
     allSymbols().forEach(seedDemo);
-    timer = setInterval(() => { demoTick(); render(); }, 3000);
-    setMode(); render();
+    timer = setInterval(() => { demoTick(); tick(); }, 3000);
+    setMode(); renderAll();
   }
   async function startLive() {
     clearInterval(timer);
     state.mode = "live";
-    state.quotes = {};
-    setMode(); render();
-    await liveTick(liveSymbols()); render();
-    if (state.mode !== "live") return;
-    timer = setInterval(async () => { await liveTick(liveSymbols()); render(); }, 20000);
+    resetData();
+    setMode(); renderAll();
+    await liveTick(liveSymbols()); if (!live()) return;
+    renderAll();
+    timer = setInterval(async () => { await liveTick(liveSymbols()); tick(); }, 20000);
   }
   function fallBackToDemo(why) {
-    toast(why + " Showing demo prices. Check your key in Settings.");
+    toast(why + " Showing demo data. Check your keys in Settings.");
     startDemo();
   }
   function setMode() {
-    const live = state.mode === "live";
     for (const el of [$("srcPill"), $("srcPill2")]) {
-      el.className = "pill " + (live ? "live" : "demo");
-      el.textContent = live ? "Live" : "Demo";
+      el.className = "pill " + (live() ? "live" : "demo");
+      el.textContent = live() ? "Live" : "Demo";
     }
-    $("srcPill").title = live ? "Live quotes from Finnhub" : "Simulated prices. Add a Finnhub key in Settings for live quotes.";
+    $("srcPill").title = live() ? "Live data. Open settings." : "Simulated data. Add free API keys in Settings for live data.";
   }
 
   // ---------- Rendering ----------
@@ -403,120 +598,256 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     if (state.addingTab) { $("newTabInput").value = typed; if (focusedNew) $("newTabInput").focus(); }
   }
 
+  const GRIP = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="3" r="1.4"/><circle cx="8" cy="3" r="1.4"/><circle cx="2" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="2" cy="13" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>';
   function renderRows() {
+    if (drag.active || drag.pending) return;
     const rows = $("rows"), t = tab();
     if (!t.symbols.length) { rows.innerHTML = `<div class="empty">No stocks in ${esc(t.name)} yet. Search above to add one.</div>`; return; }
+    const focusedSym = document.activeElement?.classList?.contains("row") ? document.activeElement.dataset.sym : null;
     rows.innerHTML = t.symbols.map((sym) => {
       const q = state.quotes[sym] || {};
       const ch = q.price != null && q.prev ? q.price - q.prev : null;
-      const pct = ch != null ? (ch / q.prev) * 100 : null;
       const cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
       const alerts = state.alerts[sym] || [];
       const hit = alerts.some((a) => a.hit);
       const bell = alerts.length ? `<span class="bell${hit ? " hit" : ""}" title="${alerts.length} alert(s)">${hit ? "HIT" : "ALERT"}</span>` : "";
       const sub = nameOf(sym) || (q.missing ? "No quote found" : q.price == null ? "Loading…" : "Prev close " + fmt(q.prev));
-      return `<div class="row${sym === state.selected ? " sel" : ""}" data-sym="${esc(sym)}" tabindex="0" role="button" aria-pressed="${sym === state.selected}">
+      return `<div class="row${sym === state.selected ? " sel" : ""}" data-sym="${esc(sym)}" tabindex="0" role="button" aria-pressed="${sym === state.selected}" aria-label="${esc(sym)}. Alt plus arrow keys to reorder">
+        <span class="grip" title="Drag to reorder">${GRIP}</span>
         <div style="min-width:0"><div class="sym">${esc(sym)} ${bell}</div><div class="sub">${esc(sub)}</div></div>
-        <svg class="spark" viewBox="0 0 76 26" aria-hidden="true"><path d="${sparkPath(q.hist || [], 76, 26)}" fill="none" stroke="${cls === "down" ? "var(--down)" : "var(--up)"}" stroke-width="1.5"/></svg>
-        <div><div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign(pct) + "%"}</div></div>
+        <svg class="spark" viewBox="0 0 64 26" aria-hidden="true"><path d="${sparkPath(q.hist || [], 64, 26)}" fill="none" stroke="${cls === "down" ? "var(--down)" : "var(--up)"}" stroke-width="1.5"/></svg>
+        <div><div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "%"}</div></div>
       </div>`;
     }).join("");
+    if (focusedSym) rows.querySelector(`.row[data-sym="${CSS.escape(focusedSym)}"]`)?.focus();
   }
 
-  function chartSVG(hist, prev, W, H) {
-    const L = 8, R = 62, T = 12, B = 26;
-    if (hist.length < 2) return `<svg class="chart" viewBox="0 0 ${W} ${H}"><text x="${W / 2}" y="${H / 2}" text-anchor="middle">Collecting prices…</text></svg>`;
-    const ps = hist.map((x) => x.p).concat(prev ? [prev] : []);
-    let lo = Math.min(...ps), hi = Math.max(...ps);
-    const padv = (hi - lo) * 0.08 || hi * 0.002; lo -= padv; hi += padv;
-    const t0 = hist[0].t, t1 = hist[hist.length - 1].t, tspan = t1 - t0 || 1;
-    const x = (t) => L + ((t - t0) / tspan) * (W - L - R);
-    const y = (p) => T + (1 - (p - lo) / (hi - lo)) * (H - T - B);
-    const line = hist.map((h, i) => `${i ? "L" : "M"}${x(h.t).toFixed(1)},${y(h.p).toFixed(1)}`).join("");
-    const area = `${line}L${x(t1).toFixed(1)},${H - B}L${x(t0).toFixed(1)},${H - B}Z`;
-    const last = hist[hist.length - 1];
-    const up = prev ? last.p >= prev : true;
-    const col = up ? "var(--up)" : "var(--down)";
-    const n = H > 380 ? 5 : 3;
-    let grid = "";
-    for (let i = 0; i <= n; i++) {
-      const v = lo + ((hi - lo) * i) / n, yy = y(v);
-      grid += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${W - R + 6}" y="${yy + 4}">${fmt(v)}</text>`;
-    }
-    const tf = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    const prevLine = prev && prev >= lo && prev <= hi ? `<line x1="${L}" x2="${W - R}" y1="${y(prev)}" y2="${y(prev)}" stroke="var(--muted)" stroke-dasharray="3 4"/><text x="${L + 4}" y="${y(prev) - 5}">prev close</text>` : "";
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Price chart">
-      <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".22"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
-      ${grid}${prevLine}
-      <path d="${area}" fill="url(#g)"/>
-      <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="${x(last.t)}" cy="${y(last.p)}" r="4" fill="${col}"/>
-      <text x="${L}" y="${H - 6}">${tf(t0)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${tf(t1)}</text>
-    </svg>`;
-  }
-
-  function renderDetail() {
-    const d = $("detail"), sym = state.selected;
-    if (!sym) { d.innerHTML = `<div class="empty">Pick a stock from ${esc(tab().name)}, or search to add one.</div>`; return; }
-    const q = state.quotes[sym] || { hist: [] };
-    const ch = q.price != null && q.prev ? q.price - q.prev : null;
-    const cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
+  // Center: built when the selection changes; price, stats and chart refresh in place on each tick.
+  function renderCenter() {
+    const c = $("center"), sym = state.selected;
+    if (!sym) { c.innerHTML = `<div class="empty">Pick a stock from ${esc(tab().name)}, or search to add one.</div>`; return; }
     const alerts = state.alerts[sym] || [];
     const typed = $("alertPrice")?.value ?? "", dir = $("alertDir")?.value ?? "above";
-    const focused = document.activeElement?.id;
+    const focused = document.activeElement?.id || document.activeElement?.dataset?.range;
     const inThisTab = tab().symbols.includes(sym);
-    d.innerHTML = `
+    c.innerHTML = `
       <div class="dhead">
-        <div style="min-width:0"><h2 class="dname">${esc(sym)}</h2><div class="sub">${nameOf(sym) ? esc(nameOf(sym)) + " · " : ""}${state.mode === "live" ? "Live quote, refreshed every 20 seconds" : "Simulated prices"}</div></div>
-        <div><div class="big">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "% today"}</div></div>
+        <div style="min-width:0"><h2 class="dname">${esc(sym)}</h2><div class="sub">${nameOf(sym) ? esc(nameOf(sym)) + " · " : ""}${live() ? "Live quote, refreshed every 20 seconds" : "Simulated prices"}</div></div>
+        <div><div id="bigPrice" class="big"></div><div id="bigChg" class="chg"></div></div>
+      </div>
+      <div class="ranges" role="group" aria-label="Chart range">
+        ${RANGES.map((r) => `<button type="button" data-range="${r.id}" aria-pressed="${r.id === state.range}">${r.id}</button>`).join("")}
+        <span id="period" class="period"></span>
       </div>
       <div id="chartBox" class="chart-box"></div>
       <div class="stats">
-        <div class="stat"><div class="k">Open</div><div class="v">${fmt(q.open)}</div></div>
-        <div class="stat"><div class="k">Day high</div><div class="v">${fmt(q.high)}</div></div>
-        <div class="stat"><div class="k">Day low</div><div class="v">${fmt(q.low)}</div></div>
-        <div class="stat"><div class="k">Prev close</div><div class="v">${fmt(q.prev)}</div></div>
+        <div class="stat"><div class="k">Open</div><div id="sOpen" class="v"></div></div>
+        <div class="stat"><div class="k">Day high</div><div id="sHigh" class="v"></div></div>
+        <div class="stat"><div class="k">Day low</div><div id="sLow" class="v"></div></div>
+        <div class="stat"><div class="k">Prev close</div><div id="sPrev" class="v"></div></div>
       </div>
       <div class="lower">
         <div>
-          <h2>Price alerts</h2>
+          <h2 class="h2">Price alerts</h2>
           <form id="alertForm" class="alert-form">
             <select id="alertDir" aria-label="Direction"><option value="above">Goes above</option><option value="below">Goes below</option></select>
-            <input id="alertPrice" type="number" step="0.01" min="0" placeholder="${fmt(q.price)}" aria-label="Alert price">
+            <input id="alertPrice" type="number" step="0.01" min="0" aria-label="Alert price">
             <button class="primary" type="submit">Add alert</button>
           </form>
           <ul class="alert-list">${alerts.length ? alerts.map((a, i) => `<li class="${a.hit ? "hit" : ""}"><span>${a.dir === "above" ? "≥" : "≤"} ${fmt(a.price)}${a.hit ? " · triggered" : ""}</span><button class="x" data-del="${i}" aria-label="Delete alert">✕</button></li>`).join("") : '<li><span class="sub">No alerts yet. You’ll get a notice when the price crosses one.</span></li>'}</ul>
         </div>
         <div>
-          <h2>Tabs</h2>
+          <h2 class="h2">Tabs</h2>
           <div class="chips">${state.tabs.map((t) => `<button class="chip" type="button" data-chip="${t.id}" aria-pressed="${t.symbols.includes(sym)}">${esc(t.name)}</button>`).join("")}</div>
           ${inThisTab ? `<button id="removeSym" class="remove danger" type="button">Remove from ${esc(tab().name)}</button>` : ""}
         </div>
       </div>`;
-    drawChart();
     $("alertPrice").value = typed; $("alertDir").value = dir;
-    if (focused && $(focused)) $(focused).focus();
+    if (focused) (document.getElementById(focused) || c.querySelector(`[data-range="${focused}"]`))?.focus();
+    updateCenterNumbers();
+    drawChart();
   }
 
+  function updateCenterNumbers() {
+    const q = state.quotes[state.selected]; if (!q || !$("bigPrice")) return;
+    const ch = q.price != null && q.prev ? q.price - q.prev : null;
+    $("bigPrice").textContent = fmt(q.price);
+    $("bigChg").className = "chg " + (ch > 0 ? "up" : ch < 0 ? "down" : "");
+    $("bigChg").textContent = ch == null ? "" : `${sign(ch)} · ${sign((ch / q.prev) * 100)}% today`;
+    $("sOpen").textContent = fmt(q.open); $("sHigh").textContent = fmt(q.high);
+    $("sLow").textContent = fmt(q.low); $("sPrev").textContent = fmt(q.prev);
+    $("alertPrice").placeholder = fmt(q.price);
+  }
+
+  // ---------- Chart ----------
+  let chartState = null, hoverX = null;
+  function tickLabel(t, range) {
+    const d = new Date(t);
+    if (range === "1D") return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (range === "5D") return d.toLocaleDateString([], { weekday: "short", day: "numeric" });
+    if (range === "5Y" || range === "All") return String(d.getFullYear());
+    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  }
   function drawChart() {
     const box = $("chartBox"); if (!box) return;
-    const q = state.quotes[state.selected] || { hist: [] };
+    const sym = state.selected, range = state.range;
+    loadHistory(sym, range);
+    const s = seriesFor(sym, range);
+    const period = $("period");
+    if (s.status !== "ok" || s.points.length < 2) {
+      chartState = null; period.textContent = "";
+      const msg = s.status === "loading" ? "Loading chart…"
+        : s.status === "needkey" ? `History charts need a free Twelve Data key.<br><button type="button" data-open-settings>Add it in Settings</button>`
+        : s.status === "error" ? esc(s.error)
+        : "Collecting prices…";
+      box.innerHTML = `<div class="chart-msg"><div>${msg}</div></div>`;
+      return;
+    }
+    const pts = s.points, q = state.quotes[sym] || {};
+    const base = range === "1D" && q.prev ? q.prev : pts[0].p;
+    const last = pts[pts.length - 1];
+    const change = last.p - base, up = change >= 0;
+    period.className = "period " + (up ? "up" : "down");
+    period.textContent = `${sign(change)} (${sign((change / base) * 100)}%) ${range === "1D" ? "today" : range === "All" ? "all time" : "past " + range}`;
     const W = Math.max(280, Math.round(box.clientWidth)), H = Math.max(200, Math.round(box.clientHeight));
-    box.innerHTML = chartSVG(q.hist, q.prev, W, H);
+    const L = 8, R = 64, T = 14, B = 26;
+    const ps = pts.map((x) => x.p).concat(range === "1D" && q.prev ? [q.prev] : []);
+    let lo = Math.min(...ps), hi = Math.max(...ps);
+    const padv = (hi - lo) * 0.08 || hi * 0.002; lo -= padv; hi += padv;
+    const n = pts.length;
+    const x = (i) => L + (i / (n - 1)) * (W - L - R);
+    const y = (p) => T + (1 - (p - lo) / (hi - lo)) * (H - T - B);
+    const line = pts.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(h.p).toFixed(1)}`).join("");
+    const area = `${line}L${x(n - 1).toFixed(1)},${H - B}L${x(0).toFixed(1)},${H - B}Z`;
+    const col = up ? "var(--up)" : "var(--down)";
+    const rows = H > 380 ? 5 : 3;
+    let grid = "";
+    for (let i = 0; i <= rows; i++) {
+      const v = lo + ((hi - lo) * i) / rows, yy = y(v);
+      grid += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${W - R + 6}" y="${yy + 4}">${fmt(v)}</text>`;
+    }
+    const nTicks = Math.max(2, Math.min(6, Math.floor((W - L - R) / 110)));
+    let xt = "";
+    for (let k = 0; k < nTicks; k++) {
+      const i = Math.round((k / (nTicks - 1)) * (n - 1));
+      xt += `<text x="${x(i)}" y="${H - 6}" text-anchor="${k === 0 ? "start" : k === nTicks - 1 ? "end" : "middle"}">${tickLabel(pts[i].t, range)}</text>`;
+    }
+    const baseLine = range === "1D" && q.prev && q.prev >= lo && q.prev <= hi ? `<line x1="${L}" x2="${W - R}" y1="${y(q.prev)}" y2="${y(q.prev)}" stroke="var(--muted)" stroke-dasharray="3 4"/><text x="${L + 4}" y="${y(q.prev) - 5}">prev close</text>` : "";
+    box.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sym)} price, ${range}">
+      <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".22"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+      ${grid}${baseLine}
+      <path d="${area}" fill="url(#g)"/>
+      <path d="${line}" fill="none" stroke="${col}" stroke-width="${n > 600 ? 1.4 : 2}" stroke-linejoin="round"/>
+      <circle cx="${x(n - 1)}" cy="${y(last.p)}" r="4" fill="${col}"/>
+      ${xt}
+      <g id="hover" style="display:none"><line id="hl" y1="${T}" y2="${H - B}" stroke="var(--muted)"/><circle id="hc" r="4" fill="var(--panel)" stroke="${col}" stroke-width="2"/><text id="ht" class="hover-label" y="${T + 2}"></text></g>
+    </svg>`;
+    chartState = { pts, x, y, L, R, W, n, range };
+    applyHover();
+  }
+  function applyHover() {
+    const g = document.getElementById("hover"); if (!g || !chartState) return;
+    if (hoverX == null) { g.style.display = "none"; return; }
+    const { pts, x, y, L, R, W, n, range } = chartState;
+    const i = Math.max(0, Math.min(n - 1, Math.round(((hoverX - L) / (W - L - R)) * (n - 1))));
+    const px = x(i), p = pts[i];
+    g.style.display = "";
+    $("hl").setAttribute("x1", px); $("hl").setAttribute("x2", px);
+    $("hc").setAttribute("cx", px); $("hc").setAttribute("cy", y(p.p));
+    const d = new Date(p.t);
+    const when = range === "1D" || range === "5D" || range === "1M"
+      ? d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+      : d.toLocaleDateString([], { year: "numeric", month: "short", day: range === "All" ? undefined : "numeric" });
+    const t = $("ht"); t.textContent = `${when} · ${fmt(p.p)}`;
+    const right = px > W / 2;
+    t.setAttribute("x", right ? px - 8 : px + 8); t.setAttribute("text-anchor", right ? "end" : "start");
+  }
+  $("center").addEventListener("pointermove", (e) => {
+    const box = e.target.closest("#chartBox"); if (!box) return;
+    hoverX = e.clientX - box.getBoundingClientRect().left; applyHover();
+  });
+  $("center").addEventListener("pointerleave", () => { hoverX = null; applyHover(); });
+  $("center").addEventListener("pointerout", (e) => { if (e.target.closest?.("#chartBox") && !e.relatedTarget?.closest?.("#chartBox")) { hoverX = null; applyHover(); } });
+
+  // ---------- Right panel: key stats, profile, news ----------
+  function demoStats(sym) {
+    const r = rng(sym + "|stats"), q = state.quotes[sym] || {}, price = q.price ?? demoBase(sym);
+    const yr = demoHistory(sym, "1Y").map((x) => x.p).concat(price);
+    const pe = 12 + r() * 30, shares = (0.4 + r() * 15) * 1e9;
+    return {
+      "Market cap": big(price * shares), "P/E (TTM)": fmt(pe), "EPS (TTM)": fmt(price / pe), "Forward P/E": fmt(pe * (0.8 + r() * 0.15)),
+      "Dividend yield": pct(r() * 3.2), "Beta": fmt(0.6 + r() * 1.2), "52-week high": fmt(Math.max(...yr)), "52-week low": fmt(Math.min(...yr)),
+      "Avg volume (10d)": big((5 + r() * 60) * 1e6), "Price / book": fmt(1.5 + r() * 20), "Net margin": pct(5 + r() * 30), "ROE": pct(8 + r() * 40),
+      "Revenue growth (YoY)": pct(-5 + r() * 25)
+    };
+  }
+  function liveStats(info, sym) {
+    const m = info.metric || {}, p = info.profile || {};
+    const pick = (...ks) => { for (const k of ks) if (m[k] != null && !isNaN(m[k])) return m[k]; return null; };
+    const mcap = p.marketCapitalization ?? pick("marketCapitalization");
+    const vol = pick("10DayAverageTradingVolume");
+    return {
+      "Market cap": mcap != null ? big(mcap * 1e6) : "—",
+      "P/E (TTM)": fmt(pick("peTTM", "peBasicExclExtraTTM", "peExclExtraTTM", "peInclExtraTTM")),
+      "EPS (TTM)": fmt(pick("epsTTM", "epsBasicExclExtraItemsTTM", "epsExclExtraItemsTTM", "epsInclExtraItemsTTM")),
+      "Forward P/E": fmt(pick("forwardPE")),
+      "Dividend yield": pct(pick("currentDividendYieldTTM", "dividendYieldIndicatedAnnual")),
+      "Beta": fmt(pick("beta")),
+      "52-week high": fmt(pick("52WeekHigh")),
+      "52-week low": fmt(pick("52WeekLow")),
+      "Avg volume (10d)": vol != null ? big(vol * 1e6) : "—",
+      "Price / book": fmt(pick("pbQuarterly", "pbAnnual", "ptbvQuarterly")),
+      "Net margin": pct(pick("netProfitMarginTTM", "netProfitMarginAnnual")),
+      "ROE": pct(pick("roeTTM", "roeRfy")),
+      "Revenue growth (YoY)": pct(pick("revenueGrowthTTMYoy", "revenueGrowthQuarterlyYoy"))
+    };
+  }
+  const ago = (sec) => { const s = Date.now() / 1000 - sec; return s < 3600 ? Math.max(1, Math.round(s / 60)) + "m ago" : s < 86400 ? Math.round(s / 3600) + "h ago" : Math.round(s / 86400) + "d ago"; };
+  const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "#";
+
+  function renderRight() {
+    const el = $("right"), sym = state.selected;
+    if (!sym) { el.innerHTML = ""; return; }
+    loadInfo(sym);
+    const info = state.info[sym] || { status: "loading" };
+    const demo = info.status === "demo";
+    let statsHtml;
+    if (info.status === "loading") statsHtml = Array.from({ length: 8 }, () => '<div class="skeleton"></div>').join("");
+    else if (info.status === "error") statsHtml = `<p class="note">Key stats couldn't load for ${esc(sym)}. Finnhub's free plan covers US-listed stocks.</p>`;
+    else {
+      const s = demo ? demoStats(sym) : liveStats(info, sym);
+      statsHtml = `<dl class="kv">${Object.entries(s).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
+    }
+    const p = info.profile || {};
+    const about = !demo && info.status === "ok" && (p.finnhubIndustry || p.exchange || p.weburl) ? `
+      <section>
+        <h2 class="h2">About</h2>
+        <dl class="kv">
+          ${p.finnhubIndustry ? `<dt>Industry</dt><dd style="font-family:var(--body)">${esc(p.finnhubIndustry)}</dd>` : ""}
+          ${p.exchange ? `<dt>Exchange</dt><dd style="font-family:var(--body)">${esc(p.exchange)}</dd>` : ""}
+          ${p.country ? `<dt>Country</dt><dd style="font-family:var(--body)">${esc(p.country)}</dd>` : ""}
+          ${p.ipo ? `<dt>IPO date</dt><dd>${esc(p.ipo)}</dd>` : ""}
+          ${p.weburl ? `<dt>Website</dt><dd><a href="${esc(safeUrl(p.weburl))}" target="_blank" rel="noopener">${esc(p.weburl.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""))}</a></dd>` : ""}
+        </dl>
+      </section>` : "";
+    let newsHtml;
+    if (demo) newsHtml = `<p class="note">Latest headlines appear here once you add a free Finnhub key in Settings. Meanwhile, <a href="https://finance.yahoo.com/quote/${encodeURIComponent(sym)}/news" target="_blank" rel="noopener">read ${esc(sym)} news on Yahoo Finance</a>.</p>`;
+    else if (info.newsStatus === "loading") newsHtml = Array.from({ length: 4 }, () => '<div class="skeleton"></div><div class="skeleton" style="width:60%"></div>').join("");
+    else if (!info.news) newsHtml = `<p class="note">News couldn't load right now.</p>`;
+    else if (!info.news.length) newsHtml = `<p class="note">No news for ${esc(sym)} in the past two weeks.</p>`;
+    else newsHtml = `<ul class="news">${info.news.map((a) => `<li>
+        <a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">${esc(a.headline)}</a>
+        <div class="meta">${esc(a.source || "")} · ${ago(a.datetime)}</div>
+        ${a.summary ? `<p>${esc(a.summary)}</p>` : ""}
+      </li>`).join("")}</ul>`;
+    el.innerHTML = `
+      <section><h2 class="h2">Key stats ${demo ? '<span class="tag">Simulated</span>' : ""}</h2>${statsHtml}</section>
+      ${about}
+      <section><h2 class="h2">Latest news</h2>${newsHtml}</section>`;
   }
 
-  function renderSettings() {
-    $("tabEdits").innerHTML = state.tabs.map((t) => `
-      <div class="tab-edit">
-        <input data-rename="${t.id}" value="${esc(t.name)}" maxlength="24" aria-label="Tab name">
-        ${state.confirmDelete === t.id
-          ? `<button class="danger" type="button" data-delete-yes="${t.id}">Confirm delete</button>`
-          : `<button type="button" data-delete="${t.id}" ${state.tabs.length === 1 ? "disabled title=\"Keep at least one tab\"" : ""}>Delete</button>`}
-        <div class="meta">${t.symbols.length ? esc(t.symbols.join(", ")) : "Empty"}</div>
-      </div>`).join("");
-  }
-
-  function render() { renderTabs(); renderRows(); renderDetail(); }
+  function renderAll() { renderTabs(); renderRows(); renderCenter(); renderRight(); }
+  function tick() { renderRows(); updateCenterNumbers(); drawChart(); }
 
   function toast(msg) {
     const el = document.createElement("div");
@@ -525,13 +856,21 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     setTimeout(() => el.remove(), 5000);
   }
 
+  // ---------- Selection ----------
+  function select(sym) {
+    if (sym === state.selected) return;
+    state.selected = sym; hoverX = null;
+    renderRows(); renderCenter(); renderRight();
+    if (live() && !state.quotes[sym]?.price) liveTick([sym]).then(() => { renderRows(); updateCenterNumbers(); drawChart(); });
+  }
+
   // ---------- Tabs ----------
   function switchTab(id) {
     state.activeTab = id; saveTabs();
     const t = tab();
     if (!t.symbols.includes(state.selected)) state.selected = t.symbols[0] || null;
-    render();
-    if (state.mode === "live") liveTick(liveSymbols().filter((s) => !state.quotes[s] || state.quotes[s].price == null)).then(render);
+    renderAll();
+    if (live()) liveTick(liveSymbols().filter((s) => !state.quotes[s] || state.quotes[s].price == null)).then(tick);
   }
   function createTab(name) {
     name = name.trim();
@@ -553,10 +892,60 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
   $("tabs").addEventListener("submit", (e) => { e.preventDefault(); createTab($("newTabInput").value); });
   $("tabs").addEventListener("keydown", (e) => { if (e.key === "Escape" && state.addingTab) { state.addingTab = false; renderTabs(); } });
 
-  // ---------- Watchlist rows ----------
-  const select = (sym) => { state.selected = sym; render(); if (state.mode === "live" && !state.quotes[sym]?.price) liveTick([sym]).then(render); };
-  $("rows").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) select(r.dataset.sym); });
-  $("rows").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); select(e.target.dataset.sym); } });
+  // ---------- Watchlist rows: select, drag to reorder ----------
+  const rowsEl = $("rows");
+  const drag = { active: false, pending: null, row: null, suppressClick: false };
+  rowsEl.addEventListener("pointerdown", (e) => {
+    const row = e.target.closest(".row"); if (!row || e.button > 0) return;
+    const onGrip = !!e.target.closest(".grip");
+    if (e.pointerType !== "mouse" && !onGrip) return;   // touch: only the grip drags, so the list still scrolls
+    drag.pending = { row, y: e.clientY, id: e.pointerId };
+    if (onGrip) e.preventDefault();
+  });
+  rowsEl.addEventListener("pointermove", (e) => {
+    if (!drag.pending && !drag.active) return;
+    if (!drag.active) {
+      if (Math.abs(e.clientY - drag.pending.y) < 6) return;
+      drag.active = true; drag.row = drag.pending.row; drag.row.classList.add("dragging");
+      try { rowsEl.setPointerCapture(drag.pending.id); } catch {}
+    }
+    e.preventDefault();
+    const others = [...rowsEl.querySelectorAll(".row")].filter((r) => r !== drag.row);
+    const before = others.find((r) => { const b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
+    if (before) { if (drag.row.nextElementSibling !== before) rowsEl.insertBefore(drag.row, before); }
+    else if (rowsEl.lastElementChild !== drag.row) rowsEl.appendChild(drag.row);
+    const box = rowsEl.getBoundingClientRect();
+    if (e.clientY < box.top + 30) rowsEl.scrollTop -= 8; else if (e.clientY > box.bottom - 30) rowsEl.scrollTop += 8;
+  });
+  function endDrag() {
+    if (drag.active) {
+      drag.row.classList.remove("dragging");
+      tab().symbols = [...rowsEl.querySelectorAll(".row")].map((r) => r.dataset.sym);
+      saveTabs(); drag.suppressClick = true; setTimeout(() => (drag.suppressClick = false), 0);
+    }
+    const wasActive = drag.active;
+    drag.active = false; drag.pending = null; drag.row = null;
+    if (wasActive) renderRows();
+  }
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+  rowsEl.addEventListener("click", (e) => {
+    if (drag.suppressClick || e.target.closest(".grip")) return;
+    const r = e.target.closest(".row"); if (r) select(r.dataset.sym);
+  });
+  rowsEl.addEventListener("keydown", (e) => {
+    const row = e.target.closest(".row"); if (!row) return;
+    const sym = row.dataset.sym, list = tab().symbols, i = list.indexOf(sym);
+    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      e.preventDefault();
+      const j = e.key === "ArrowUp" ? i - 1 : i + 1;
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j], list[i]]; saveTabs(); renderRows();
+      rowsEl.querySelector(`.row[data-sym="${CSS.escape(sym)}"]`)?.focus();
+      return;
+    }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(sym); }
+  });
 
   // ---------- Search: company name or ticker ----------
   const input = $("addInput"), list = $("results");
@@ -569,9 +958,7 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
       .map(([, [symbol, name]]) => ({ symbol, name, type: "" }));
   }
   async function remoteMatches(q) {
-    const r = await fetch(`https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(state.key)}`);
-    if (!r.ok) throw new Error("http " + r.status);
-    const d = await r.json();
+    const d = await finnhub("search", { q });
     return (d.result || []).filter((x) => x.symbol && x.description).slice(0, 12)
       .map((x) => ({ symbol: x.symbol, name: x.description, type: x.type || "" }));
   }
@@ -599,7 +986,7 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     const local = localMatches(q);
     const looksLikeTicker = /^[A-Za-z.\-]{1,6}$/.test(q) && !local.some((r) => r.symbol === q.toUpperCase());
     const typed = looksLikeTicker ? [{ symbol: q.toUpperCase(), name: "Add this ticker as typed", type: "" }] : [];
-    if (state.mode !== "live") { showResults(local.concat(typed), local.length ? "" : "Demo mode searches popular companies. Add a Finnhub key in Settings to search every listed company."); return; }
+    if (!live()) { showResults(local.concat(typed), local.length ? "" : "Demo mode searches popular companies. Add a Finnhub key in Settings to search every listed company."); return; }
     showResults(local, "Searching all listed companies…");
     const my = ++seq;
     debounce = setTimeout(async () => {
@@ -635,23 +1022,22 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
   });
 
   function ensureQuote(sym) {
-    if (state.mode === "demo") seedDemo(sym);
-    else if (!state.quotes[sym]) { state.quotes[sym] = { hist: [] }; fetchQuote(sym).then(render).catch(() => toast(`Couldn't load a quote for ${sym}.`)); }
+    if (!live()) seedDemo(sym);
+    else if (!state.quotes[sym]) { state.quotes[sym] = { hist: [] }; fetchQuote(sym).then(tick).catch(() => toast(`Couldn't load a quote for ${sym}.`)); }
   }
   function addSymbol({ symbol, name }) {
     const sym = symbol.toUpperCase(), t = tab();
     input.value = ""; hideResults(); seq++;
     if (name && name !== "Add this ticker as typed") { state.names[sym] = name; store.set("names", state.names); }
-    state.selected = sym;
-    if (t.symbols.includes(sym)) { render(); toast(`${sym} is already in ${t.name}.`); return; }
+    if (t.symbols.includes(sym)) { select(sym); toast(`${sym} is already in ${t.name}.`); return; }
     t.symbols.push(sym); saveTabs();
     ensureQuote(sym);
-    render();
+    renderTabs(); select(sym); renderRows();
     toast(`Added ${sym} to ${t.name}.`);
   }
 
-  // ---------- Detail panel ----------
-  $("detail").addEventListener("submit", (e) => {
+  // ---------- Center panel events ----------
+  $("center").addEventListener("submit", (e) => {
     if (e.target.id !== "alertForm") return;
     e.preventDefault();
     const price = parseFloat($("alertPrice").value);
@@ -662,31 +1048,46 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
     $("alertPrice").value = "";
     toast(`Alert set: ${sym} ${$("alertDir").value} ${fmt(price)}.`);
     const q = state.quotes[sym]; if (q?.price != null) checkAlerts(sym, q.price);
-    render();
+    renderRows(); renderCenter();
   });
-  $("detail").addEventListener("click", (e) => {
+  $("center").addEventListener("click", (e) => {
     const sym = state.selected;
+    const rb = e.target.closest("[data-range]");
+    if (rb) { state.range = rb.dataset.range; store.set("range", state.range); hoverX = null; c_ranges(); drawChart(); return; }
+    if (e.target.closest("[data-open-settings]")) { openSettings(); return; }
     const del = e.target.closest("[data-del]");
-    if (del) { state.alerts[sym].splice(+del.dataset.del, 1); store.set("alerts", state.alerts); render(); return; }
+    if (del) { state.alerts[sym].splice(+del.dataset.del, 1); store.set("alerts", state.alerts); renderRows(); renderCenter(); return; }
     const chip = e.target.closest("[data-chip]");
     if (chip) {
       const t = state.tabs.find((x) => x.id === chip.dataset.chip);
       if (t.symbols.includes(sym)) { t.symbols = t.symbols.filter((s) => s !== sym); toast(`Removed ${sym} from ${t.name}.`); }
       else { t.symbols.push(sym); ensureQuote(sym); toast(`Added ${sym} to ${t.name}.`); }
-      saveTabs(); render(); return;
+      saveTabs(); renderTabs(); renderRows(); renderCenter(); return;
     }
     if (e.target.id === "removeSym") {
       const t = tab();
       t.symbols = t.symbols.filter((s) => s !== sym); saveTabs();
       toast(`Removed ${sym} from ${t.name}.`);
-      state.selected = t.symbols[0] || null; render();
+      state.selected = null; renderTabs();
+      select(t.symbols[0] || null); if (!t.symbols.length) renderAll();
     }
   });
-  if (window.ResizeObserver) new ResizeObserver(() => drawChart()).observe($("detail"));
+  function c_ranges() { document.querySelectorAll("[data-range]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.range === state.range))); }
+  if (window.ResizeObserver) new ResizeObserver(() => drawChart()).observe($("center"));
 
   // ---------- Settings ----------
-  function openSettings() { state.confirmDelete = null; $("keyInput").value = state.key; renderSettings(); $("settings").hidden = false; $("closeSettings").focus(); }
+  function openSettings() { state.confirmDelete = null; $("keyInput").value = state.key; $("tdKeyInput").value = state.tdKey; renderSettings(); $("settings").hidden = false; $("closeSettings").focus(); }
   function closeSettings() { $("settings").hidden = true; $("settingsBtn").focus(); }
+  function renderSettings() {
+    $("tabEdits").innerHTML = state.tabs.map((t) => `
+      <div class="tab-edit">
+        <input data-rename="${t.id}" value="${esc(t.name)}" maxlength="24" aria-label="Tab name">
+        ${state.confirmDelete === t.id
+          ? `<button class="danger" type="button" data-delete-yes="${t.id}">Confirm delete</button>`
+          : `<button type="button" data-delete="${t.id}" ${state.tabs.length === 1 ? "disabled title=\"Keep at least one tab\"" : ""}>Delete</button>`}
+        <div class="meta">${t.symbols.length ? esc(t.symbols.join(", ")) : "Empty"}</div>
+      </div>`).join("");
+  }
   $("settingsBtn").addEventListener("click", openSettings);
   $("srcPill").addEventListener("click", openSettings);
   $("closeSettings").addEventListener("click", closeSettings);
@@ -695,18 +1096,19 @@ h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; whi
 
   $("keyForm").addEventListener("submit", (e) => {
     e.preventDefault();
-    const k = $("keyInput").value.trim();
-    if (!k) { toast("Paste your Finnhub API key first."); return; }
+    const k = $("keyInput").value.trim(), td = $("tdKeyInput").value.trim();
+    state.tdKey = td; store.set("tdkey", td);
+    if (!k) { toast(td ? "Saved. Live mode also needs a Finnhub key." : "Paste at least your Finnhub key first."); return; }
     state.key = k; store.set("key", k); closeSettings(); startLive();
-    toast("Switched to live prices.");
+    toast(td ? "Switched to live data." : "Switched to live prices. Add a Twelve Data key for history charts.");
   });
-  $("demoBtn").addEventListener("click", () => { state.key = ""; store.set("key", ""); closeSettings(); startDemo(); toast("Switched to demo prices."); });
+  $("demoBtn").addEventListener("click", () => { state.key = ""; store.set("key", ""); closeSettings(); startDemo(); toast("Switched to demo data."); });
 
   $("tabEdits").addEventListener("change", (e) => {
     const id = e.target.dataset.rename; if (!id) return;
     const t = state.tabs.find((x) => x.id === id), v = e.target.value.trim();
     if (!v) { e.target.value = t.name; return; }
-    t.name = v; saveTabs(); render(); renderSettings();
+    t.name = v; saveTabs(); renderAll(); renderSettings();
   });
   $("tabEdits").addEventListener("click", (e) => {
     const ask = e.target.closest("[data-delete]");
