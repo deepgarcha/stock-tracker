@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: a two-pane desk. Watchlist on the left, the selected ticker's chart and alerts on the right; stacks to one column on phones. */
+/* Layout: full-height app. Top bar holds the tab strip; below it the active tab's list on the left and the selected ticker filling the rest. Stacks on phones. */
 :root {
   --bg: #f3f5f7;
   --panel: #ffffff;
@@ -18,6 +18,7 @@
   --down: #c0392b;
   --warn: #a86400;
   --warn-soft: #fff3df;
+  --scrim: rgba(15, 21, 28, 0.42);
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -26,118 +27,181 @@
   :root:not([data-theme="light"]) {
     --bg: #0f151c; --panel: #161e27; --fg: #e6ecf2; --muted: #93a1b0; --line: #26313d;
     --accent: #6ea8ef; --accent-soft: #1b2a3c; --up: #3ccf8e; --down: #ff7a6b; --warn: #f0b354; --warn-soft: #2e2516;
+    --scrim: rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0f151c; --panel: #161e27; --fg: #e6ecf2; --muted: #93a1b0; --line: #26313d;
   --accent: #6ea8ef; --accent-soft: #1b2a3c; --up: #3ccf8e; --down: #ff7a6b; --warn: #f0b354; --warn-soft: #2e2516;
+  --scrim: rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
-.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: grid; gap: 16px; }
-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-h1 { font: 800 1.5rem/1.1 var(--display); letter-spacing: -0.01em; margin: 0; }
-h2 { font: 700 1rem/1.2 var(--display); margin: 0; }
-.src { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
-.pill { font: 500 0.72rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; border: 1px solid var(--line); }
-.pill.live { color: var(--up); border-color: currentColor; }
-.pill.demo { color: var(--warn); border-color: currentColor; background: var(--warn-soft); }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; }
 button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 600; }
+button.danger { color: var(--down); }
 button:focus-visible, input:focus-visible, select:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input, select { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px; min-width: 0; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-.notice { padding: 10px 14px; font-size: 0.88rem; color: var(--muted); }
-.notice strong { color: var(--fg); }
-.desk { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 820px) { .desk { grid-template-columns: minmax(0, 1fr); } }
-.list-head { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid var(--line); position: relative; }
-.list-head input { flex: 1; }
-.results { position: absolute; left: 14px; right: 14px; top: calc(100% - 8px); z-index: 4; margin: 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.14); max-height: 320px; overflow-y: auto; }
-.results li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+
+/* Top bar */
+.top { display: flex; align-items: center; gap: 16px; padding-inline: 16px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; white-space: nowrap; }
+.tabs { display: flex; align-items: stretch; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 16px 12px 14px; white-space: nowrap; color: var(--muted); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.tab:hover { color: var(--fg); border-bottom-color: var(--line); }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.tab .count { font: 500 0.7rem/1 var(--mono); color: var(--muted); background: var(--bg); border-radius: 999px; padding: 3px 6px; }
+.tab.add { color: var(--accent); }
+.new-tab { display: flex; align-items: center; gap: 6px; padding-inline: 8px; }
+.new-tab input { width: 150px; padding: 5px 8px; }
+.top-right { display: flex; align-items: center; gap: 8px; }
+.pill { font: 500 0.7rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.live { color: var(--up); background: none; }
+.pill.demo { color: var(--warn); background: var(--warn-soft); }
+.icon-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; }
+.icon-btn svg { width: 18px; height: 18px; }
+
+/* Desk */
+.desk { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); min-height: 0; }
+.side { display: grid; grid-template-rows: auto minmax(0, 1fr); border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
+.search { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); position: relative; }
+.search input { flex: 1; }
+.rows { overflow-y: auto; min-height: 0; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 76px auto; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.row:hover { background: var(--bg); }
+.row.sel { background: var(--accent-soft); }
+.sym { font: 700 0.95rem/1.2 var(--display); display: flex; align-items: center; gap: 6px; }
+.bell { font: 500 0.62rem/1 var(--mono); color: var(--warn); border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px; }
+.bell.hit { background: var(--warn); color: var(--panel); }
+.sub { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px { text-align: right; font: 500 0.92rem/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.chg { font: 400 0.76rem/1.3 var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.up { color: var(--up); } .down { color: var(--down); }
+.spark { width: 76px; height: 26px; display: block; }
+.empty { padding: 28px 16px; color: var(--muted); font-size: 0.9rem; }
+
+.results { position: absolute; left: 16px; right: 16px; top: calc(100% - 6px); z-index: 4; margin: 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.14); max-height: 340px; overflow-y: auto; }
+.results li { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
 .results li[aria-selected="true"], .results li:hover { background: var(--accent-soft); }
 .results .rs { font: 700 0.9rem/1.2 var(--display); }
 .results .rn { font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.results .rt { font: 0.68rem/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.results .rt { font: 0.66rem/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .results .rmsg { display: block; color: var(--muted); font-size: 0.85rem; cursor: default; }
 .results .rmsg:hover { background: none; }
-.rows { display: grid; }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) 84px auto; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
-.row:last-child { border-bottom: 0; }
-.row:hover { background: var(--bg); }
-.row.sel { background: var(--accent-soft); }
-.sym { font: 700 0.98rem/1.2 var(--display); display: flex; align-items: center; gap: 6px; }
-.bell { font: 500 0.66rem/1 var(--mono); color: var(--warn); border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px; }
-.bell.hit { background: var(--warn); color: var(--panel); }
-.sub { font-size: 0.78rem; color: var(--muted); }
-.px { text-align: right; font: 500 0.95rem/1.2 var(--mono); font-variant-numeric: tabular-nums; }
-.chg { font: 400 0.78rem/1.3 var(--mono); font-variant-numeric: tabular-nums; }
-.up { color: var(--up); } .down { color: var(--down); }
-.spark { width: 84px; height: 28px; display: block; }
-.detail { padding: 18px; display: grid; gap: 16px; min-width: 0; }
-.dhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
-.big { font: 700 2rem/1 var(--mono); font-variant-numeric: tabular-nums; }
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.stat { border-top: 1px solid var(--line); padding-top: 6px; }
-.stat .k { font: 500 0.68rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.stat .v { font: 500 0.95rem/1.6 var(--mono); font-variant-numeric: tabular-nums; }
-.chart { width: 100%; height: auto; display: block; }
+
+.detail { display: flex; flex-direction: column; gap: 18px; padding: 20px 24px; min-width: 0; min-height: 0; overflow-y: auto; }
+.dhead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; }
+.dname { font: 800 1.9rem/1 var(--display); margin: 0; }
+.big { font: 600 2.2rem/1 var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.chart-box { flex: 1 1 auto; min-height: 260px; position: relative; }
+.chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .chart text { fill: var(--muted); font: 11px var(--mono); }
-.alerts { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { border-top: 1px solid var(--line); padding-top: 6px; }
+.k { font: 500 0.68rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.stat .v { font: 500 1rem/1.6 var(--mono); font-variant-numeric: tabular-nums; }
+.lower { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
+.lower h2 { font: 700 0.95rem/1.2 var(--display); margin: 0 0 10px; }
 .alert-form { display: flex; flex-wrap: wrap; gap: 8px; }
 .alert-form input { width: 120px; }
-.alert-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.alert-list { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
 .alert-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 0.88rem var(--mono); padding: 6px 10px; border-radius: 8px; background: var(--bg); }
 .alert-list li.hit { background: var(--warn-soft); color: var(--warn); }
+.alert-list .sub { white-space: normal; font-family: var(--body); }
 .x { border: 0; background: none; color: var(--muted); padding: 2px 6px; }
-.settings { padding: 14px; display: grid; gap: 10px; }
-.settings form { display: flex; flex-wrap: wrap; gap: 8px; }
-.settings input { flex: 1 1 240px; font-family: var(--mono); }
-.settings p { margin: 0; font-size: 0.85rem; color: var(--muted); max-width: 70ch; }
-.settings a { color: var(--accent); }
-.toast-box { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; z-index: 5; max-width: calc(100% - 32px); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border-radius: 999px; padding: 5px 12px; font-size: 0.85rem; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.remove { margin-top: 12px; }
+
+/* Settings drawer */
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 10; display: flex; justify-content: flex-end; }
+.drawer { width: min(440px, 100%); height: 100%; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: calc(18px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px)); display: grid; align-content: start; gap: 24px; }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; }
+.drawer-head h2 { font: 800 1.2rem/1 var(--display); margin: 0; }
+.drawer section { display: grid; gap: 10px; }
+.drawer h3 { font: 700 0.95rem/1.2 var(--display); margin: 0; display: flex; align-items: center; gap: 8px; }
+.drawer p { margin: 0; font-size: 0.87rem; color: var(--muted); }
+.drawer a { color: var(--accent); }
+.key-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.key-form input { flex: 1 1 100%; font-family: var(--mono); }
+.tab-edit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.tab-edit .meta { grid-column: 1 / -1; font-size: 0.78rem; color: var(--muted); margin-top: -4px; }
+
+.toast-box { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; z-index: 20; max-width: calc(100% - 32px); }
 .toast { background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 0.9rem; box-shadow: 0 6px 24px rgba(0,0,0,.2); }
-.empty { padding: 24px 14px; color: var(--muted); font-size: 0.9rem; }
 @media (prefers-reduced-motion: no-preference) { .flash-up { animation: fu .8s; } .flash-down { animation: fd .8s; } }
 @keyframes fu { from { color: var(--up); } }
 @keyframes fd { from { color: var(--down); } }
-</style>
 
-<div class="wrap">
-  <header>
+@media (max-width: 860px) {
+  .app { height: auto; min-height: 100%; }
+  .top { flex-wrap: wrap; gap: 0 12px; padding-top: 12px; }
+  .tabs { order: 3; flex-basis: 100%; }
+  .top-right { margin-left: auto; }
+  .desk { grid-template-columns: minmax(0, 1fr); }
+  .side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .rows { max-height: 46vh; }
+  .detail { padding: 18px 16px; overflow: visible; }
+  .chart-box { flex: none; height: 260px; }
+  .lower { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) { .big { text-align: left; } .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .big { font-size: 1.8rem; } }
+</style>
+</head><body>
+<div class="app">
+  <header class="top">
     <h1>Ticker Desk</h1>
-    <div class="src"><span id="srcPill" class="pill demo">Demo data</span><button id="settingsBtn" type="button">Data source</button></div>
+    <nav id="tabs" class="tabs" role="tablist" aria-label="Stock groups"></nav>
+    <div class="top-right">
+      <span id="srcPill" class="pill demo">Demo</span>
+      <button id="settingsBtn" class="icon-btn" type="button" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
   </header>
 
-  <section id="settings" class="panel settings" hidden>
-    <h2>Live prices</h2>
-    <p>Paste a free <a href="https://finnhub.io/register" target="_blank" rel="noopener">Finnhub</a> API key to pull real quotes (free tier: 60 requests a minute, US stocks). The key stays in this browser only. Leave it empty to use simulated demo prices.</p>
-    <form id="keyForm">
-      <input id="keyInput" type="password" placeholder="Finnhub API key" autocomplete="off">
-      <button class="primary" type="submit">Use live prices</button>
-      <button id="demoBtn" type="button">Use demo data</button>
-    </form>
-  </section>
-
-  <div id="notice" class="panel notice"><strong>Demo mode.</strong> Prices are simulated so you can try the watchlist, charts and alerts. Switch to live quotes under Data source.</div>
-
-  <div class="desk">
-    <section class="panel" aria-label="Watchlist">
-      <form id="addForm" class="list-head">
-        <input id="addInput" placeholder="Search company or ticker, e.g. Apple or AMZN" maxlength="60" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="results" aria-autocomplete="list" aria-label="Search company or ticker">
-        <ul id="results" class="results" role="listbox" hidden></ul>
+  <main class="desk">
+    <aside class="side" aria-label="Stocks in this tab">
+      <form id="addForm" class="search">
+        <input id="addInput" placeholder="Search company or ticker" maxlength="60" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="results" aria-autocomplete="list" aria-label="Search company or ticker">
         <button class="primary" type="submit">Add</button>
+        <ul id="results" class="results" role="listbox" hidden></ul>
       </form>
       <div id="rows" class="rows"></div>
+    </aside>
+    <section id="detail" class="detail" aria-live="polite"></section>
+  </main>
+</div>
+
+<div id="settings" class="scrim" hidden>
+  <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="drawer-head"><h2 id="settingsTitle">Settings</h2><button id="closeSettings" class="icon-btn" type="button" aria-label="Close settings">✕</button></div>
+
+    <section>
+      <h3>Data source <span id="srcPill2" class="pill demo">Demo</span></h3>
+      <p>Paste a free <a href="https://finnhub.io/register" target="_blank" rel="noopener">Finnhub</a> API key for real quotes and full company search (free tier: 60 requests a minute, US stocks). The key is saved in this browser only. Without a key, prices are simulated.</p>
+      <form id="keyForm" class="key-form">
+        <input id="keyInput" type="password" placeholder="Finnhub API key" autocomplete="off">
+        <button class="primary" type="submit">Use live prices</button>
+        <button id="demoBtn" type="button">Use demo data</button>
+      </form>
     </section>
 
-    <section id="detail" class="panel detail" aria-live="polite"></section>
+    <section>
+      <h3>Tabs</h3>
+      <p>Rename or delete your tabs. Stocks stay in any other tab they belong to.</p>
+      <div id="tabEdits" style="display:grid;gap:12px"></div>
+      <button id="newTabFromSettings" type="button">New tab</button>
+    </section>
   </div>
 </div>
 <div id="toasts" class="toast-box" role="status"></div>
@@ -150,7 +214,7 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
   };
 
   // Rough reference levels for the simulator only. Not real quotes.
-  const DEMO_BASE = { AAPL: 228, MSFT: 418, NVDA: 121, TSLA: 251, SPY: 572, AMZN: 186, GOOGL: 166, META: 588 };
+  const DEMO_BASE = { AAPL: 228, MSFT: 418, NVDA: 121, TSLA: 251, SPY: 572, AMZN: 186, GOOGL: 166, META: 588, JPM: 221, JNJ: 162, XOM: 118, CVX: 147, COP: 106, SLB: 42, NEE: 84 };
 
   // Offline search index used in demo mode and as instant matches before Finnhub answers.
   const COMPANIES = [
@@ -167,28 +231,56 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     ["VZ","Verizon Communications Inc"],["TMUS","T-Mobile US Inc"],["F","Ford Motor Co"],["GM","General Motors Co"],["RIVN","Rivian Automotive Inc"],["TSM","Taiwan Semiconductor Manufacturing"],
     ["ASML","ASML Holding NV"],["BABA","Alibaba Group Holding Ltd"],["SONY","Sony Group Corp"],["TM","Toyota Motor Corp"],["SAP","SAP SE"],["NVO","Novo Nordisk A/S"],
     ["INFY","Infosys Ltd"],["HDB","HDFC Bank Ltd"],["IBN","ICICI Bank Ltd"],["WIT","Wipro Ltd"],["MU","Micron Technology Inc"],["ARM","Arm Holdings plc"],
-    ["SMCI","Super Micro Computer Inc"],["DELL","Dell Technologies Inc"],["HPQ","HP Inc"],["LOW","Lowe's Companies Inc"],["TGT","Target Corp"],["SPY","SPDR S&P 500 ETF Trust"],
-    ["QQQ","Invesco QQQ Trust"],["DIA","SPDR Dow Jones Industrial Average ETF"],["IWM","iShares Russell 2000 ETF"],["VOO","Vanguard S&P 500 ETF"],["VTI","Vanguard Total Stock Market ETF"]
+    ["SMCI","Super Micro Computer Inc"],["DELL","Dell Technologies Inc"],["HPQ","HP Inc"],["LOW","Lowe's Companies Inc"],["TGT","Target Corp"],
+    ["COP","ConocoPhillips"],["SLB","Schlumberger NV"],["EOG","EOG Resources Inc"],["OXY","Occidental Petroleum Corp"],["PSX","Phillips 66"],["MPC","Marathon Petroleum Corp"],
+    ["VLO","Valero Energy Corp"],["KMI","Kinder Morgan Inc"],["NEE","NextEra Energy Inc"],["DUK","Duke Energy Corp"],["SO","Southern Co"],["ENPH","Enphase Energy Inc"],
+    ["FSLR","First Solar Inc"],["BP","BP plc"],["SHEL","Shell plc"],["XLE","Energy Select Sector SPDR Fund"],
+    ["SPY","SPDR S&P 500 ETF Trust"],["QQQ","Invesco QQQ Trust"],["DIA","SPDR Dow Jones Industrial Average ETF"],["IWM","iShares Russell 2000 ETF"],["VOO","Vanguard S&P 500 ETF"],["VTI","Vanguard Total Stock Market ETF"]
   ];
+  const NAME_OF = Object.fromEntries(COMPANIES);
+
+  const uid = () => Math.random().toString(36).slice(2, 9);
+
+  // Tabs: load saved ones, or start with two example groups (and keep any older single watchlist).
+  function loadTabs() {
+    const saved = store.get("tabs", null);
+    if (Array.isArray(saved) && saved.length) return saved;
+    const tabs = [
+      { id: uid(), name: "Blue Chip", symbols: ["AAPL", "MSFT", "NVDA", "JPM", "JNJ"] },
+      { id: uid(), name: "Energy", symbols: ["XOM", "CVX", "COP", "SLB", "NEE"] }
+    ];
+    const old = store.get("symbols", null);
+    if (Array.isArray(old) && old.length && old.join() !== "AAPL,MSFT,NVDA,TSLA,SPY") tabs.unshift({ id: uid(), name: "Watchlist", symbols: old });
+    return tabs;
+  }
 
   const state = {
-    names: store.get("names", {}),
-    symbols: store.get("symbols", ["AAPL", "MSFT", "NVDA", "TSLA", "SPY"]),
-    alerts: store.get("alerts", { NVDA: [{ dir: "above", price: 125, hit: false }] }),
+    tabs: loadTabs(),
+    activeTab: store.get("activeTab", null),
+    names: Object.assign({}, store.get("names", {})),
+    alerts: store.get("alerts", {}),
     selected: null,
     key: store.get("key", ""),
     mode: "demo",
-    quotes: {}   // sym -> { price, open, high, low, prev, hist: [{t, p}] }
+    quotes: {},          // sym -> { price, open, high, low, prev, hist: [{t, p}] }
+    addingTab: false,
+    confirmDelete: null
   };
-  state.selected = state.symbols[0] || null;
+  if (!state.tabs.some((t) => t.id === state.activeTab)) state.activeTab = state.tabs[0].id;
 
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => n == null || isNaN(n) ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sign = (n) => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const tab = () => state.tabs.find((t) => t.id === state.activeTab) || state.tabs[0];
+  const allSymbols = () => [...new Set(state.tabs.flatMap((t) => t.symbols))];
+  const nameOf = (sym) => state.names[sym] || NAME_OF[sym] || "";
+  const saveTabs = () => { store.set("tabs", state.tabs); store.set("activeTab", state.activeTab); };
+  state.selected = tab()?.symbols[0] || null;
 
   // ---------- Demo feed: one simulated session of 5-minute points, then live ticks ----------
   function seedDemo(sym) {
+    if (state.quotes[sym]) return;
     let base = DEMO_BASE[sym];
     if (!base) { let h = 0; for (const c of sym) h = (h * 31 + c.charCodeAt(0)) % 997; base = 20 + h / 3; }
     const prev = base;
@@ -205,13 +297,13 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     state.quotes[sym] = { price: p, open: hist[0].p, high: Math.max(...ps), low: Math.min(...ps), prev, hist };
   }
   function demoTick() {
-    for (const sym of state.symbols) {
+    for (const sym of allSymbols()) {
       const q = state.quotes[sym]; if (!q) continue;
       update(sym, q.price * (1 + (Math.random() - 0.5) * 0.004));
     }
   }
 
-  // ---------- Live feed: Finnhub /quote polling ----------
+  // ---------- Live feed: Finnhub /quote polling for the open tab ----------
   async function fetchQuote(sym) {
     const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(state.key)}`);
     if (r.status === 401 || r.status === 403) throw new Error("key");
@@ -222,16 +314,19 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     Object.assign(q, { open: d.o, high: d.h, low: d.l, prev: d.pc });
     update(sym, d.c);
   }
-  async function liveTick() {
-    for (const sym of state.symbols) {
+  async function liveTick(syms) {
+    for (const sym of syms) {
+      if (state.mode !== "live") return;
       try { await fetchQuote(sym); }
       catch (e) {
-        if (e.message === "nosym") { toast(`No quote found for ${sym}.`); continue; }
-        fallBackToDemo(e.message === "key" ? "Finnhub rejected that API key." : "Live quotes couldn't be reached from this page.");
+        if (e.message === "nosym") { state.quotes[sym] ||= { hist: [] }; state.quotes[sym].missing = true; continue; }
+        fallBackToDemo(e.message === "key" ? "Finnhub rejected that API key." : "Live quotes couldn't be reached.");
         return;
       }
     }
   }
+  // Only the open tab is polled, so the free 60 calls/min limit covers tabs of up to about 15 stocks.
+  const liveSymbols = () => [...new Set(tab().symbols.concat(state.selected ? [state.selected] : []))];
 
   function update(sym, price) {
     const q = state.quotes[sym]; if (!q) return;
@@ -264,7 +359,7 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     clearInterval(timer);
     state.mode = "demo";
     state.quotes = {};
-    state.symbols.forEach(seedDemo);
+    allSymbols().forEach(seedDemo);
     timer = setInterval(() => { demoTick(); render(); }, 3000);
     setMode(); render();
   }
@@ -273,22 +368,21 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     state.mode = "live";
     state.quotes = {};
     setMode(); render();
-    await liveTick(); render();
+    await liveTick(liveSymbols()); render();
     if (state.mode !== "live") return;
-    // 5 symbols every 20s stays far under the 60 calls/min free limit.
-    timer = setInterval(async () => { await liveTick(); render(); }, 20000);
+    timer = setInterval(async () => { await liveTick(liveSymbols()); render(); }, 20000);
   }
   function fallBackToDemo(why) {
-    toast(why + " Showing demo data.");
+    toast(why + " Showing demo prices. Check your key in Settings.");
     startDemo();
-    $("notice").innerHTML = `<strong>Demo mode.</strong> ${esc(why)} If you opened this inside a hosted preview, save the file and open it in your browser instead, where live requests are allowed.`;
   }
   function setMode() {
     const live = state.mode === "live";
-    $("srcPill").className = "pill " + (live ? "live" : "demo");
-    $("srcPill").textContent = live ? "Live · Finnhub" : "Demo data";
-    $("notice").hidden = live;
-    if (!live) $("notice").innerHTML = "<strong>Demo mode.</strong> Prices are simulated so you can try the watchlist, charts and alerts. Switch to live quotes under Data source.";
+    for (const el of [$("srcPill"), $("srcPill2")]) {
+      el.className = "pill " + (live ? "live" : "demo");
+      el.textContent = live ? "Live" : "Demo";
+    }
+    $("srcPill").title = live ? "Live quotes from Finnhub" : "Simulated prices. Add a Finnhub key in Settings for live quotes.";
   }
 
   // ---------- Rendering ----------
@@ -298,10 +392,21 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     return hist.map((x, i) => `${i ? "L" : "M"}${(pad + (i / (hist.length - 1)) * (w - pad * 2)).toFixed(1)},${(pad + (1 - (x.p - lo) / span) * (h - pad * 2)).toFixed(1)}`).join("");
   }
 
+  function renderTabs() {
+    const nav = $("tabs");
+    const focusedNew = document.activeElement?.id === "newTabInput";
+    const typed = $("newTabInput")?.value ?? "";
+    nav.innerHTML = state.tabs.map((t) => `<button class="tab" type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === state.activeTab}">${esc(t.name)}<span class="count">${t.symbols.length}</span></button>`).join("")
+      + (state.addingTab
+        ? `<form id="newTabForm" class="new-tab"><input id="newTabInput" maxlength="24" placeholder="Tab name, e.g. Tech" aria-label="New tab name"><button class="primary" type="submit">Create</button><button id="cancelNewTab" type="button">Cancel</button></form>`
+        : `<button id="addTabBtn" class="tab add" type="button">+ New tab</button>`);
+    if (state.addingTab) { $("newTabInput").value = typed; if (focusedNew) $("newTabInput").focus(); }
+  }
+
   function renderRows() {
-    const rows = $("rows");
-    if (!state.symbols.length) { rows.innerHTML = '<div class="empty">Your watchlist is empty. Add a ticker above to start tracking it.</div>'; return; }
-    rows.innerHTML = state.symbols.map((sym) => {
+    const rows = $("rows"), t = tab();
+    if (!t.symbols.length) { rows.innerHTML = `<div class="empty">No stocks in ${esc(t.name)} yet. Search above to add one.</div>`; return; }
+    rows.innerHTML = t.symbols.map((sym) => {
       const q = state.quotes[sym] || {};
       const ch = q.price != null && q.prev ? q.price - q.prev : null;
       const pct = ch != null ? (ch / q.prev) * 100 : null;
@@ -309,16 +414,17 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
       const alerts = state.alerts[sym] || [];
       const hit = alerts.some((a) => a.hit);
       const bell = alerts.length ? `<span class="bell${hit ? " hit" : ""}" title="${alerts.length} alert(s)">${hit ? "HIT" : "ALERT"}</span>` : "";
+      const sub = nameOf(sym) || (q.missing ? "No quote found" : q.price == null ? "Loading…" : "Prev close " + fmt(q.prev));
       return `<div class="row${sym === state.selected ? " sel" : ""}" data-sym="${esc(sym)}" tabindex="0" role="button" aria-pressed="${sym === state.selected}">
-        <div><div class="sym">${esc(sym)} ${bell}</div><div class="sub">${esc(state.names[sym] || (q.price == null ? "Loading…" : "Prev close " + fmt(q.prev)))}</div></div>
-        <svg class="spark" viewBox="0 0 84 28" aria-hidden="true"><path d="${sparkPath(q.hist || [], 84, 28)}" fill="none" stroke="${cls === "down" ? "var(--down)" : "var(--up)"}" stroke-width="1.5"/></svg>
-        <div><div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}</div><div class="chg ${cls}" style="text-align:right">${ch == null ? "" : sign(ch) + " · " + sign(pct) + "%"}</div></div>
+        <div style="min-width:0"><div class="sym">${esc(sym)} ${bell}</div><div class="sub">${esc(sub)}</div></div>
+        <svg class="spark" viewBox="0 0 76 26" aria-hidden="true"><path d="${sparkPath(q.hist || [], 76, 26)}" fill="none" stroke="${cls === "down" ? "var(--down)" : "var(--up)"}" stroke-width="1.5"/></svg>
+        <div><div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign(pct) + "%"}</div></div>
       </div>`;
     }).join("");
   }
 
-  function chartSVG(hist, prev) {
-    const W = 640, H = 260, L = 8, R = 56, T = 12, B = 26;
+  function chartSVG(hist, prev, W, H) {
+    const L = 8, R = 62, T = 12, B = 26;
     if (hist.length < 2) return `<svg class="chart" viewBox="0 0 ${W} ${H}"><text x="${W / 2}" y="${H / 2}" text-anchor="middle">Collecting prices…</text></svg>`;
     const ps = hist.map((x) => x.p).concat(prev ? [prev] : []);
     let lo = Math.min(...ps), hi = Math.max(...ps);
@@ -331,10 +437,10 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     const last = hist[hist.length - 1];
     const up = prev ? last.p >= prev : true;
     const col = up ? "var(--up)" : "var(--down)";
-    // 4 evenly spaced price gridlines with labels at real values
+    const n = H > 380 ? 5 : 3;
     let grid = "";
-    for (let i = 0; i <= 3; i++) {
-      const v = lo + ((hi - lo) * i) / 3, yy = y(v);
+    for (let i = 0; i <= n; i++) {
+      const v = lo + ((hi - lo) * i) / n, yy = y(v);
       grid += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${W - R + 6}" y="${yy + 4}">${fmt(v)}</text>`;
     }
     const tf = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -351,52 +457,106 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
 
   function renderDetail() {
     const d = $("detail"), sym = state.selected;
-    if (!sym) { d.innerHTML = '<div class="empty">Pick a ticker from your watchlist to see its chart and set price alerts.</div>'; return; }
+    if (!sym) { d.innerHTML = `<div class="empty">Pick a stock from ${esc(tab().name)}, or search to add one.</div>`; return; }
     const q = state.quotes[sym] || { hist: [] };
     const ch = q.price != null && q.prev ? q.price - q.prev : null;
     const cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
     const alerts = state.alerts[sym] || [];
-    // keep typed alert value across re-renders
     const typed = $("alertPrice")?.value ?? "", dir = $("alertDir")?.value ?? "above";
     const focused = document.activeElement?.id;
+    const inThisTab = tab().symbols.includes(sym);
     d.innerHTML = `
       <div class="dhead">
-        <div><h2 style="font-size:1.4rem">${esc(sym)}</h2><div class="sub">${state.names[sym] ? esc(state.names[sym]) + " · " : ""}${state.mode === "live" ? "Live quote, refreshed every 20 seconds" : "Simulated session"}</div></div>
-        <div style="text-align:right"><div class="big">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "% today"}</div></div>
+        <div style="min-width:0"><h2 class="dname">${esc(sym)}</h2><div class="sub">${nameOf(sym) ? esc(nameOf(sym)) + " · " : ""}${state.mode === "live" ? "Live quote, refreshed every 20 seconds" : "Simulated prices"}</div></div>
+        <div><div class="big">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "% today"}</div></div>
       </div>
-      ${chartSVG(q.hist, q.prev)}
+      <div id="chartBox" class="chart-box"></div>
       <div class="stats">
         <div class="stat"><div class="k">Open</div><div class="v">${fmt(q.open)}</div></div>
         <div class="stat"><div class="k">Day high</div><div class="v">${fmt(q.high)}</div></div>
         <div class="stat"><div class="k">Day low</div><div class="v">${fmt(q.low)}</div></div>
         <div class="stat"><div class="k">Prev close</div><div class="v">${fmt(q.prev)}</div></div>
       </div>
-      <div class="alerts">
-        <h2>Price alerts</h2>
-        <form id="alertForm" class="alert-form">
-          <select id="alertDir" aria-label="Direction"><option value="above">Goes above</option><option value="below">Goes below</option></select>
-          <input id="alertPrice" type="number" step="0.01" min="0" placeholder="${fmt(q.price)}" aria-label="Alert price">
-          <button class="primary" type="submit">Add alert</button>
-          <button id="removeSym" type="button">Remove ${esc(sym)}</button>
-        </form>
-        <ul class="alert-list">${alerts.length ? alerts.map((a, i) => `<li class="${a.hit ? "hit" : ""}"><span>${a.dir === "above" ? "≥" : "≤"} ${fmt(a.price)}${a.hit ? " · triggered" : ""}</span><button class="x" data-del="${i}" aria-label="Delete alert">✕</button></li>`).join("") : '<li><span class="sub">No alerts yet. You’ll get a notice here when the price crosses one.</span></li>'}</ul>
+      <div class="lower">
+        <div>
+          <h2>Price alerts</h2>
+          <form id="alertForm" class="alert-form">
+            <select id="alertDir" aria-label="Direction"><option value="above">Goes above</option><option value="below">Goes below</option></select>
+            <input id="alertPrice" type="number" step="0.01" min="0" placeholder="${fmt(q.price)}" aria-label="Alert price">
+            <button class="primary" type="submit">Add alert</button>
+          </form>
+          <ul class="alert-list">${alerts.length ? alerts.map((a, i) => `<li class="${a.hit ? "hit" : ""}"><span>${a.dir === "above" ? "≥" : "≤"} ${fmt(a.price)}${a.hit ? " · triggered" : ""}</span><button class="x" data-del="${i}" aria-label="Delete alert">✕</button></li>`).join("") : '<li><span class="sub">No alerts yet. You’ll get a notice when the price crosses one.</span></li>'}</ul>
+        </div>
+        <div>
+          <h2>Tabs</h2>
+          <div class="chips">${state.tabs.map((t) => `<button class="chip" type="button" data-chip="${t.id}" aria-pressed="${t.symbols.includes(sym)}">${esc(t.name)}</button>`).join("")}</div>
+          ${inThisTab ? `<button id="removeSym" class="remove danger" type="button">Remove from ${esc(tab().name)}</button>` : ""}
+        </div>
       </div>`;
+    drawChart();
     $("alertPrice").value = typed; $("alertDir").value = dir;
     if (focused && $(focused)) $(focused).focus();
   }
 
-  function render() { renderRows(); renderDetail(); }
+  function drawChart() {
+    const box = $("chartBox"); if (!box) return;
+    const q = state.quotes[state.selected] || { hist: [] };
+    const W = Math.max(280, Math.round(box.clientWidth)), H = Math.max(200, Math.round(box.clientHeight));
+    box.innerHTML = chartSVG(q.hist, q.prev, W, H);
+  }
+
+  function renderSettings() {
+    $("tabEdits").innerHTML = state.tabs.map((t) => `
+      <div class="tab-edit">
+        <input data-rename="${t.id}" value="${esc(t.name)}" maxlength="24" aria-label="Tab name">
+        ${state.confirmDelete === t.id
+          ? `<button class="danger" type="button" data-delete-yes="${t.id}">Confirm delete</button>`
+          : `<button type="button" data-delete="${t.id}" ${state.tabs.length === 1 ? "disabled title=\"Keep at least one tab\"" : ""}>Delete</button>`}
+        <div class="meta">${t.symbols.length ? esc(t.symbols.join(", ")) : "Empty"}</div>
+      </div>`).join("");
+  }
+
+  function render() { renderTabs(); renderRows(); renderDetail(); }
 
   function toast(msg) {
     const el = document.createElement("div");
     el.className = "toast"; el.textContent = msg;
     $("toasts").appendChild(el);
-    setTimeout(() => el.remove(), 6000);
+    setTimeout(() => el.remove(), 5000);
   }
 
-  // ---------- Events ----------
-  $("rows").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) { state.selected = r.dataset.sym; render(); } });
-  $("rows").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); state.selected = e.target.dataset.sym; render(); } });
+  // ---------- Tabs ----------
+  function switchTab(id) {
+    state.activeTab = id; saveTabs();
+    const t = tab();
+    if (!t.symbols.includes(state.selected)) state.selected = t.symbols[0] || null;
+    render();
+    if (state.mode === "live") liveTick(liveSymbols().filter((s) => !state.quotes[s] || state.quotes[s].price == null)).then(render);
+  }
+  function createTab(name) {
+    name = name.trim();
+    if (!name) { toast("Give the tab a name first."); return; }
+    if (state.tabs.some((t) => t.name.toLowerCase() === name.toLowerCase())) { toast(`You already have a tab called ${name}.`); return; }
+    const t = { id: uid(), name, symbols: [] };
+    state.tabs.push(t); state.addingTab = false;
+    switchTab(t.id);
+    toast(`Created ${name}. Search to add stocks to it.`);
+    $("addInput").focus();
+  }
+
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tab]");
+    if (b) { switchTab(b.dataset.tab); return; }
+    if (e.target.closest("#addTabBtn")) { state.addingTab = true; renderTabs(); $("newTabInput").focus(); return; }
+    if (e.target.closest("#cancelNewTab")) { state.addingTab = false; renderTabs(); }
+  });
+  $("tabs").addEventListener("submit", (e) => { e.preventDefault(); createTab($("newTabInput").value); });
+  $("tabs").addEventListener("keydown", (e) => { if (e.key === "Escape" && state.addingTab) { state.addingTab = false; renderTabs(); } });
+
+  // ---------- Watchlist rows ----------
+  const select = (sym) => { state.selected = sym; render(); if (state.mode === "live" && !state.quotes[sym]?.price) liveTick([sym]).then(render); };
+  $("rows").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) select(r.dataset.sym); });
+  $("rows").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); select(e.target.dataset.sym); } });
 
   // ---------- Search: company name or ticker ----------
   const input = $("addInput"), list = $("results");
@@ -439,7 +599,7 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     const local = localMatches(q);
     const looksLikeTicker = /^[A-Za-z.\-]{1,6}$/.test(q) && !local.some((r) => r.symbol === q.toUpperCase());
     const typed = looksLikeTicker ? [{ symbol: q.toUpperCase(), name: "Add this ticker as typed", type: "" }] : [];
-    if (state.mode !== "live") { showResults(local.concat(typed), local.length ? "" : "Demo mode searches popular US companies. Add a Finnhub key to search every listed company."); return; }
+    if (state.mode !== "live") { showResults(local.concat(typed), local.length ? "" : "Demo mode searches popular companies. Add a Finnhub key in Settings to search every listed company."); return; }
     showResults(local, "Searching all listed companies…");
     const my = ++seq;
     debounce = setTimeout(async () => {
@@ -474,19 +634,23 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     if (sym) addSymbol({ symbol: sym, name: "" });
   });
 
+  function ensureQuote(sym) {
+    if (state.mode === "demo") seedDemo(sym);
+    else if (!state.quotes[sym]) { state.quotes[sym] = { hist: [] }; fetchQuote(sym).then(render).catch(() => toast(`Couldn't load a quote for ${sym}.`)); }
+  }
   function addSymbol({ symbol, name }) {
-    const sym = symbol.toUpperCase();
+    const sym = symbol.toUpperCase(), t = tab();
     input.value = ""; hideResults(); seq++;
     if (name && name !== "Add this ticker as typed") { state.names[sym] = name; store.set("names", state.names); }
-    if (state.symbols.includes(sym)) { state.selected = sym; render(); toast(`${sym} is already on your watchlist.`); return; }
-    state.symbols.push(sym); store.set("symbols", state.symbols);
     state.selected = sym;
-    if (state.mode === "demo") seedDemo(sym);
-    else { state.quotes[sym] = { hist: [] }; fetchQuote(sym).then(render).catch(() => toast(`Couldn't load a quote for ${sym}.`)); }
+    if (t.symbols.includes(sym)) { render(); toast(`${sym} is already in ${t.name}.`); return; }
+    t.symbols.push(sym); saveTabs();
+    ensureQuote(sym);
     render();
-    toast(`Added ${sym}${state.names[sym] ? " · " + state.names[sym] : ""}.`);
+    toast(`Added ${sym} to ${t.name}.`);
   }
 
+  // ---------- Detail panel ----------
   $("detail").addEventListener("submit", (e) => {
     if (e.target.id !== "alertForm") return;
     e.preventDefault();
@@ -501,27 +665,66 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     render();
   });
   $("detail").addEventListener("click", (e) => {
+    const sym = state.selected;
     const del = e.target.closest("[data-del]");
-    if (del) { state.alerts[state.selected].splice(+del.dataset.del, 1); store.set("alerts", state.alerts); render(); return; }
+    if (del) { state.alerts[sym].splice(+del.dataset.del, 1); store.set("alerts", state.alerts); render(); return; }
+    const chip = e.target.closest("[data-chip]");
+    if (chip) {
+      const t = state.tabs.find((x) => x.id === chip.dataset.chip);
+      if (t.symbols.includes(sym)) { t.symbols = t.symbols.filter((s) => s !== sym); toast(`Removed ${sym} from ${t.name}.`); }
+      else { t.symbols.push(sym); ensureQuote(sym); toast(`Added ${sym} to ${t.name}.`); }
+      saveTabs(); render(); return;
+    }
     if (e.target.id === "removeSym") {
-      const sym = state.selected;
-      state.symbols = state.symbols.filter((s) => s !== sym); delete state.quotes[sym]; delete state.alerts[sym];
-      store.set("symbols", state.symbols); store.set("alerts", state.alerts);
-      state.selected = state.symbols[0] || null; render();
+      const t = tab();
+      t.symbols = t.symbols.filter((s) => s !== sym); saveTabs();
+      toast(`Removed ${sym} from ${t.name}.`);
+      state.selected = t.symbols[0] || null; render();
     }
   });
+  if (window.ResizeObserver) new ResizeObserver(() => drawChart()).observe($("detail"));
 
-  $("settingsBtn").addEventListener("click", () => { $("settings").hidden = !$("settings").hidden; $("keyInput").value = state.key; });
+  // ---------- Settings ----------
+  function openSettings() { state.confirmDelete = null; $("keyInput").value = state.key; renderSettings(); $("settings").hidden = false; $("closeSettings").focus(); }
+  function closeSettings() { $("settings").hidden = true; $("settingsBtn").focus(); }
+  $("settingsBtn").addEventListener("click", openSettings);
+  $("srcPill").addEventListener("click", openSettings);
+  $("closeSettings").addEventListener("click", closeSettings);
+  $("settings").addEventListener("click", (e) => { if (e.target === $("settings")) closeSettings(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("settings").hidden) closeSettings(); });
+
   $("keyForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const k = $("keyInput").value.trim();
     if (!k) { toast("Paste your Finnhub API key first."); return; }
-    state.key = k; store.set("key", k); $("settings").hidden = true; startLive();
+    state.key = k; store.set("key", k); closeSettings(); startLive();
+    toast("Switched to live prices.");
   });
-  $("demoBtn").addEventListener("click", () => { state.key = ""; store.set("key", ""); $("settings").hidden = true; startDemo(); });
+  $("demoBtn").addEventListener("click", () => { state.key = ""; store.set("key", ""); closeSettings(); startDemo(); toast("Switched to demo prices."); });
 
+  $("tabEdits").addEventListener("change", (e) => {
+    const id = e.target.dataset.rename; if (!id) return;
+    const t = state.tabs.find((x) => x.id === id), v = e.target.value.trim();
+    if (!v) { e.target.value = t.name; return; }
+    t.name = v; saveTabs(); render(); renderSettings();
+  });
+  $("tabEdits").addEventListener("click", (e) => {
+    const ask = e.target.closest("[data-delete]");
+    if (ask) { state.confirmDelete = ask.dataset.delete; renderSettings(); return; }
+    const yes = e.target.closest("[data-delete-yes]");
+    if (yes) {
+      const t = state.tabs.find((x) => x.id === yes.dataset.deleteYes);
+      state.tabs = state.tabs.filter((x) => x !== t); state.confirmDelete = null;
+      if (state.activeTab === t.id) state.activeTab = state.tabs[0].id;
+      saveTabs(); switchTab(state.activeTab); renderSettings();
+      toast(`Deleted ${t.name}.`);
+    }
+  });
+  $("newTabFromSettings").addEventListener("click", () => { closeSettings(); state.addingTab = true; renderTabs(); $("newTabInput").focus(); });
+
+  saveTabs();
   state.key ? startLive() : startDemo();
 })();
 </script>
-
+</body>
 </html>
