@@ -35,6 +35,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
 .wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: grid; gap: 16px; }
 header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
@@ -55,8 +56,16 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
 .notice strong { color: var(--fg); }
 .desk { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 820px) { .desk { grid-template-columns: minmax(0, 1fr); } }
-.list-head { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid var(--line); }
-.list-head input { flex: 1; text-transform: uppercase; }
+.list-head { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid var(--line); position: relative; }
+.list-head input { flex: 1; }
+.results { position: absolute; left: 14px; right: 14px; top: calc(100% - 8px); z-index: 4; margin: 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.14); max-height: 320px; overflow-y: auto; }
+.results li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+.results li[aria-selected="true"], .results li:hover { background: var(--accent-soft); }
+.results .rs { font: 700 0.9rem/1.2 var(--display); }
+.results .rn { font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.results .rt { font: 0.68rem/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.results .rmsg { display: block; color: var(--muted); font-size: 0.85rem; cursor: default; }
+.results .rmsg:hover { background: none; }
 .rows { display: grid; }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) 84px auto; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .row:last-child { border-bottom: 0; }
@@ -121,7 +130,8 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
   <div class="desk">
     <section class="panel" aria-label="Watchlist">
       <form id="addForm" class="list-head">
-        <input id="addInput" placeholder="Add ticker, e.g. AMZN" maxlength="10" autocomplete="off" aria-label="Ticker symbol">
+        <input id="addInput" placeholder="Search company or ticker, e.g. Apple or AMZN" maxlength="60" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="results" aria-autocomplete="list" aria-label="Search company or ticker">
+        <ul id="results" class="results" role="listbox" hidden></ul>
         <button class="primary" type="submit">Add</button>
       </form>
       <div id="rows" class="rows"></div>
@@ -142,7 +152,27 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
   // Rough reference levels for the simulator only. Not real quotes.
   const DEMO_BASE = { AAPL: 228, MSFT: 418, NVDA: 121, TSLA: 251, SPY: 572, AMZN: 186, GOOGL: 166, META: 588 };
 
+  // Offline search index used in demo mode and as instant matches before Finnhub answers.
+  const COMPANIES = [
+    ["AAPL","Apple Inc"],["MSFT","Microsoft Corp"],["NVDA","NVIDIA Corp"],["AMZN","Amazon.com Inc"],["GOOGL","Alphabet Inc Class A"],["GOOG","Alphabet Inc Class C"],
+    ["META","Meta Platforms Inc"],["TSLA","Tesla Inc"],["BRK.B","Berkshire Hathaway Inc Class B"],["AVGO","Broadcom Inc"],["LLY","Eli Lilly and Co"],["JPM","JPMorgan Chase & Co"],
+    ["V","Visa Inc"],["MA","Mastercard Inc"],["UNH","UnitedHealth Group Inc"],["XOM","Exxon Mobil Corp"],["WMT","Walmart Inc"],["JNJ","Johnson & Johnson"],
+    ["PG","Procter & Gamble Co"],["HD","Home Depot Inc"],["COST","Costco Wholesale Corp"],["ORCL","Oracle Corp"],["ABBV","AbbVie Inc"],["BAC","Bank of America Corp"],
+    ["KO","Coca-Cola Co"],["PEP","PepsiCo Inc"],["NFLX","Netflix Inc"],["CRM","Salesforce Inc"],["AMD","Advanced Micro Devices Inc"],["ADBE","Adobe Inc"],
+    ["DIS","Walt Disney Co"],["CSCO","Cisco Systems Inc"],["INTC","Intel Corp"],["QCOM","Qualcomm Inc"],["TXN","Texas Instruments Inc"],["IBM","International Business Machines Corp"],
+    ["MCD","McDonald's Corp"],["NKE","Nike Inc"],["SBUX","Starbucks Corp"],["BA","Boeing Co"],["CAT","Caterpillar Inc"],["GE","GE Aerospace"],
+    ["GS","Goldman Sachs Group Inc"],["MS","Morgan Stanley"],["WFC","Wells Fargo & Co"],["C","Citigroup Inc"],["AXP","American Express Co"],["PYPL","PayPal Holdings Inc"],
+    ["UBER","Uber Technologies Inc"],["ABNB","Airbnb Inc"],["SHOP","Shopify Inc"],["SQ","Block Inc"],["PLTR","Palantir Technologies Inc"],["SNOW","Snowflake Inc"],
+    ["COIN","Coinbase Global Inc"],["SPOT","Spotify Technology SA"],["PFE","Pfizer Inc"],["MRK","Merck & Co Inc"],["CVX","Chevron Corp"],["T","AT&T Inc"],
+    ["VZ","Verizon Communications Inc"],["TMUS","T-Mobile US Inc"],["F","Ford Motor Co"],["GM","General Motors Co"],["RIVN","Rivian Automotive Inc"],["TSM","Taiwan Semiconductor Manufacturing"],
+    ["ASML","ASML Holding NV"],["BABA","Alibaba Group Holding Ltd"],["SONY","Sony Group Corp"],["TM","Toyota Motor Corp"],["SAP","SAP SE"],["NVO","Novo Nordisk A/S"],
+    ["INFY","Infosys Ltd"],["HDB","HDFC Bank Ltd"],["IBN","ICICI Bank Ltd"],["WIT","Wipro Ltd"],["MU","Micron Technology Inc"],["ARM","Arm Holdings plc"],
+    ["SMCI","Super Micro Computer Inc"],["DELL","Dell Technologies Inc"],["HPQ","HP Inc"],["LOW","Lowe's Companies Inc"],["TGT","Target Corp"],["SPY","SPDR S&P 500 ETF Trust"],
+    ["QQQ","Invesco QQQ Trust"],["DIA","SPDR Dow Jones Industrial Average ETF"],["IWM","iShares Russell 2000 ETF"],["VOO","Vanguard S&P 500 ETF"],["VTI","Vanguard Total Stock Market ETF"]
+  ];
+
   const state = {
+    names: store.get("names", {}),
     symbols: store.get("symbols", ["AAPL", "MSFT", "NVDA", "TSLA", "SPY"]),
     alerts: store.get("alerts", { NVDA: [{ dir: "above", price: 125, hit: false }] }),
     selected: null,
@@ -280,7 +310,7 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
       const hit = alerts.some((a) => a.hit);
       const bell = alerts.length ? `<span class="bell${hit ? " hit" : ""}" title="${alerts.length} alert(s)">${hit ? "HIT" : "ALERT"}</span>` : "";
       return `<div class="row${sym === state.selected ? " sel" : ""}" data-sym="${esc(sym)}" tabindex="0" role="button" aria-pressed="${sym === state.selected}">
-        <div><div class="sym">${esc(sym)} ${bell}</div><div class="sub">${q.price == null ? "Loading…" : "Prev close " + fmt(q.prev)}</div></div>
+        <div><div class="sym">${esc(sym)} ${bell}</div><div class="sub">${esc(state.names[sym] || (q.price == null ? "Loading…" : "Prev close " + fmt(q.prev)))}</div></div>
         <svg class="spark" viewBox="0 0 84 28" aria-hidden="true"><path d="${sparkPath(q.hist || [], 84, 28)}" fill="none" stroke="${cls === "down" ? "var(--down)" : "var(--up)"}" stroke-width="1.5"/></svg>
         <div><div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}</div><div class="chg ${cls}" style="text-align:right">${ch == null ? "" : sign(ch) + " · " + sign(pct) + "%"}</div></div>
       </div>`;
@@ -331,7 +361,7 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
     const focused = document.activeElement?.id;
     d.innerHTML = `
       <div class="dhead">
-        <div><h2 style="font-size:1.4rem">${esc(sym)}</h2><div class="sub">${state.mode === "live" ? "Live quote, refreshed every 20 seconds" : "Simulated session"}</div></div>
+        <div><h2 style="font-size:1.4rem">${esc(sym)}</h2><div class="sub">${state.names[sym] ? esc(state.names[sym]) + " · " : ""}${state.mode === "live" ? "Live quote, refreshed every 20 seconds" : "Simulated session"}</div></div>
         <div style="text-align:right"><div class="big">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "% today"}</div></div>
       </div>
       ${chartSVG(q.hist, q.prev)}
@@ -368,17 +398,94 @@ input, select { border: 1px solid var(--line); background: var(--bg); border-rad
   $("rows").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) { state.selected = r.dataset.sym; render(); } });
   $("rows").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); state.selected = e.target.dataset.sym; render(); } });
 
-  $("addForm").addEventListener("submit", async (e) => {
+  // ---------- Search: company name or ticker ----------
+  const input = $("addInput"), list = $("results");
+  let results = [], active = -1, seq = 0, debounce = null;
+
+  function localMatches(q) {
+    const Q = q.toUpperCase(), ql = q.toLowerCase();
+    const score = ([sym, name]) => sym === Q ? 0 : sym.startsWith(Q) ? 1 : name.toLowerCase().startsWith(ql) ? 2 : name.toLowerCase().includes(ql) ? 3 : sym.includes(Q) ? 4 : 9;
+    return COMPANIES.map((c) => [score(c), c]).filter(([n]) => n < 9).sort((a, b) => a[0] - b[0]).slice(0, 8)
+      .map(([, [symbol, name]]) => ({ symbol, name, type: "" }));
+  }
+  async function remoteMatches(q) {
+    const r = await fetch(`https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(state.key)}`);
+    if (!r.ok) throw new Error("http " + r.status);
+    const d = await r.json();
+    return (d.result || []).filter((x) => x.symbol && x.description).slice(0, 12)
+      .map((x) => ({ symbol: x.symbol, name: x.description, type: x.type || "" }));
+  }
+  function showResults(items, msg) {
+    results = items; active = items.length ? 0 : -1;
+    list.innerHTML = items.map((r, i) => `<li role="option" id="opt${i}" data-i="${i}" aria-selected="${i === active}"><span class="rs">${esc(r.symbol)}</span><span class="rn">${esc(r.name)}</span><span class="rt">${esc(r.type)}</span></li>`).join("")
+      + (msg ? `<li class="rmsg" role="presentation">${esc(msg)}</li>` : "");
+    list.hidden = !items.length && !msg;
+    input.setAttribute("aria-expanded", String(!list.hidden));
+    input.setAttribute("aria-activedescendant", active >= 0 ? "opt" + active : "");
+  }
+  function hideResults() { list.hidden = true; input.setAttribute("aria-expanded", "false"); }
+  function setActive(i) {
+    if (!results.length) return;
+    active = (i + results.length) % results.length;
+    list.querySelectorAll("li[data-i]").forEach((li) => li.setAttribute("aria-selected", String(+li.dataset.i === active)));
+    input.setAttribute("aria-activedescendant", "opt" + active);
+    $("opt" + active)?.scrollIntoView({ block: "nearest" });
+  }
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim();
+    clearTimeout(debounce);
+    if (!q) { hideResults(); return; }
+    const local = localMatches(q);
+    const looksLikeTicker = /^[A-Za-z.\-]{1,6}$/.test(q) && !local.some((r) => r.symbol === q.toUpperCase());
+    const typed = looksLikeTicker ? [{ symbol: q.toUpperCase(), name: "Add this ticker as typed", type: "" }] : [];
+    if (state.mode !== "live") { showResults(local.concat(typed), local.length ? "" : "Demo mode searches popular US companies. Add a Finnhub key to search every listed company."); return; }
+    showResults(local, "Searching all listed companies…");
+    const my = ++seq;
+    debounce = setTimeout(async () => {
+      try {
+        const remote = await remoteMatches(q);
+        if (my !== seq) return;
+        const seen = new Set(), merged = [];
+        for (const r of remote.concat(local)) if (!seen.has(r.symbol)) { seen.add(r.symbol); merged.push(r); }
+        showResults(merged.slice(0, 12), merged.length ? "" : `No companies match “${q}”.`);
+      } catch {
+        if (my === seq) showResults(local.concat(typed), "Live search is unavailable right now. Showing popular companies.");
+      }
+    }, 300);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (list.hidden) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive(active + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive(active - 1); }
+    else if (e.key === "Escape") { hideResults(); }
+  });
+  list.addEventListener("mousedown", (e) => {
+    const li = e.target.closest("li[data-i]"); if (!li) return;
+    e.preventDefault(); addSymbol(results[+li.dataset.i]);
+  });
+  input.addEventListener("blur", () => setTimeout(hideResults, 120));
+  input.addEventListener("focus", () => { if (input.value.trim()) input.dispatchEvent(new Event("input")); });
+
+  $("addForm").addEventListener("submit", (e) => {
     e.preventDefault();
-    const sym = $("addInput").value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
-    if (!sym) return;
-    if (state.symbols.includes(sym)) { toast(`${sym} is already on your watchlist.`); return; }
+    if (!list.hidden && results[active]) { addSymbol(results[active]); return; }
+    const sym = input.value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+    if (sym) addSymbol({ symbol: sym, name: "" });
+  });
+
+  function addSymbol({ symbol, name }) {
+    const sym = symbol.toUpperCase();
+    input.value = ""; hideResults(); seq++;
+    if (name && name !== "Add this ticker as typed") { state.names[sym] = name; store.set("names", state.names); }
+    if (state.symbols.includes(sym)) { state.selected = sym; render(); toast(`${sym} is already on your watchlist.`); return; }
     state.symbols.push(sym); store.set("symbols", state.symbols);
-    state.selected = sym; $("addInput").value = "";
+    state.selected = sym;
     if (state.mode === "demo") seedDemo(sym);
     else { state.quotes[sym] = { hist: [] }; fetchQuote(sym).then(render).catch(() => toast(`Couldn't load a quote for ${sym}.`)); }
     render();
-  });
+    toast(`Added ${sym}${state.names[sym] ? " · " + state.names[sym] : ""}.`);
+  }
 
   $("detail").addEventListener("submit", (e) => {
     if (e.target.id !== "alertForm") return;
