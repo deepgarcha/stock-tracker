@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Ticker Desk</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a two-pane desk. Watchlist on the left, the selected ticker's chart and alerts on the right; stacks to one column on phones. */
+:root {
+  --bg: #f3f5f7;
+  --panel: #ffffff;
+  --fg: #16202b;
+  --muted: #5d6b7a;
+  --line: #dde3ea;
+  --accent: #1f5fae;
+  --accent-soft: #e4eefa;
+  --up: #0f7a4a;
+  --down: #c0392b;
+  --warn: #a86400;
+  --warn-soft: #fff3df;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151c; --panel: #161e27; --fg: #e6ecf2; --muted: #93a1b0; --line: #26313d;
+    --accent: #6ea8ef; --accent-soft: #1b2a3c; --up: #3ccf8e; --down: #ff7a6b; --warn: #f0b354; --warn-soft: #2e2516;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #161e27; --fg: #e6ecf2; --muted: #93a1b0; --line: #26313d;
+  --accent: #6ea8ef; --accent-soft: #1b2a3c; --up: #3ccf8e; --down: #ff7a6b; --warn: #f0b354; --warn-soft: #2e2516;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { font: 800 1.5rem/1.1 var(--display); letter-spacing: -0.01em; margin: 0; }
+h2 { font: 700 1rem/1.2 var(--display); margin: 0; }
+.src { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+.pill { font: 500 0.72rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.pill.live { color: var(--up); border-color: currentColor; }
+.pill.demo { color: var(--warn); border-color: currentColor; background: var(--warn-soft); }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 600; }
+button:focus-visible, input:focus-visible, select:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input, select { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.notice { padding: 10px 14px; font-size: 0.88rem; color: var(--muted); }
+.notice strong { color: var(--fg); }
+.desk { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 820px) { .desk { grid-template-columns: minmax(0, 1fr); } }
+.list-head { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid var(--line); }
+.list-head input { flex: 1; text-transform: uppercase; }
+.rows { display: grid; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 84px auto; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.row:last-child { border-bottom: 0; }
+.row:hover { background: var(--bg); }
+.row.sel { background: var(--accent-soft); }
+.sym { font: 700 0.98rem/1.2 var(--display); display: flex; align-items: center; gap: 6px; }
+.bell { font: 500 0.66rem/1 var(--mono); color: var(--warn); border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px; }
+.bell.hit { background: var(--warn); color: var(--panel); }
+.sub { font-size: 0.78rem; color: var(--muted); }
+.px { text-align: right; font: 500 0.95rem/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.chg { font: 400 0.78rem/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+.up { color: var(--up); } .down { color: var(--down); }
+.spark { width: 84px; height: 28px; display: block; }
+.detail { padding: 18px; display: grid; gap: 16px; min-width: 0; }
+.dhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.big { font: 700 2rem/1 var(--mono); font-variant-numeric: tabular-nums; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { border-top: 1px solid var(--line); padding-top: 6px; }
+.stat .k { font: 500 0.68rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.stat .v { font: 500 0.95rem/1.6 var(--mono); font-variant-numeric: tabular-nums; }
+.chart { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--muted); font: 11px var(--mono); }
+.alerts { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.alert-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.alert-form input { width: 120px; }
+.alert-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.alert-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 0.88rem var(--mono); padding: 6px 10px; border-radius: 8px; background: var(--bg); }
+.alert-list li.hit { background: var(--warn-soft); color: var(--warn); }
+.x { border: 0; background: none; color: var(--muted); padding: 2px 6px; }
+.settings { padding: 14px; display: grid; gap: 10px; }
+.settings form { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings input { flex: 1 1 240px; font-family: var(--mono); }
+.settings p { margin: 0; font-size: 0.85rem; color: var(--muted); max-width: 70ch; }
+.settings a { color: var(--accent); }
+.toast-box { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; z-index: 5; max-width: calc(100% - 32px); }
+.toast { background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 0.9rem; box-shadow: 0 6px 24px rgba(0,0,0,.2); }
+.empty { padding: 24px 14px; color: var(--muted); font-size: 0.9rem; }
+@media (prefers-reduced-motion: no-preference) { .flash-up { animation: fu .8s; } .flash-down { animation: fd .8s; } }
+@keyframes fu { from { color: var(--up); } }
+@keyframes fd { from { color: var(--down); } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Ticker Desk</h1>
+    <div class="src"><span id="srcPill" class="pill demo">Demo data</span><button id="settingsBtn" type="button">Data source</button></div>
+  </header>
+
+  <section id="settings" class="panel settings" hidden>
+    <h2>Live prices</h2>
+    <p>Paste a free <a href="https://finnhub.io/register" target="_blank" rel="noopener">Finnhub</a> API key to pull real quotes (free tier: 60 requests a minute, US stocks). The key stays in this browser only. Leave it empty to use simulated demo prices.</p>
+    <form id="keyForm">
+      <input id="keyInput" type="password" placeholder="Finnhub API key" autocomplete="off">
+      <button class="primary" type="submit">Use live prices</button>
+      <button id="demoBtn" type="button">Use demo data</button>
+    </form>
+  </section>
+
+  <div id="notice" class="panel notice"><strong>Demo mode.</strong> Prices are simulated so you can try the watchlist, charts and alerts. Switch to live quotes under Data source.</div>
+
+  <div class="desk">
+    <section class="panel" aria-label="Watchlist">
+      <form id="addForm" class="list-head">
+        <input id="addInput" placeholder="Add ticker, e.g. AMZN" maxlength="10" autocomplete="off" aria-label="Ticker symbol">
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <div id="rows" class="rows"></div>
+    </section>
+
+    <section id="detail" class="panel detail" aria-live="polite"></section>
+  </div>
+</div>
+<div id="toasts" class="toast-box" role="status"></div>
+
+<script>
+(() => {
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("td_" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("td_" + k, JSON.stringify(v)); } catch {} }
+  };
+
+  // Rough reference levels for the simulator only. Not real quotes.
+  const DEMO_BASE = { AAPL: 228, MSFT: 418, NVDA: 121, TSLA: 251, SPY: 572, AMZN: 186, GOOGL: 166, META: 588 };
+
+  const state = {
+    symbols: store.get("symbols", ["AAPL", "MSFT", "NVDA", "TSLA", "SPY"]),
+    alerts: store.get("alerts", { NVDA: [{ dir: "above", price: 125, hit: false }] }),
+    selected: null,
+    key: store.get("key", ""),
+    mode: "demo",
+    quotes: {}   // sym -> { price, open, high, low, prev, hist: [{t, p}] }
+  };
+  state.selected = state.symbols[0] || null;
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => n == null || isNaN(n) ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sign = (n) => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---------- Demo feed: one simulated session of 5-minute points, then live ticks ----------
+  function seedDemo(sym) {
+    let base = DEMO_BASE[sym];
+    if (!base) { let h = 0; for (const c of sym) h = (h * 31 + c.charCodeAt(0)) % 997; base = 20 + h / 3; }
+    const prev = base;
+    const start = new Date(); start.setHours(9, 30, 0, 0);
+    const now = Date.now();
+    let p = prev * (1 + (Math.random() - 0.5) * 0.01);
+    const hist = [];
+    for (let t = start.getTime(); t <= now && hist.length < 78; t += 5 * 60 * 1000) {
+      p *= 1 + (Math.random() - 0.5) * 0.006;
+      hist.push({ t, p });
+    }
+    if (!hist.length) hist.push({ t: now, p });
+    const ps = hist.map((h) => h.p);
+    state.quotes[sym] = { price: p, open: hist[0].p, high: Math.max(...ps), low: Math.min(...ps), prev, hist };
+  }
+  function demoTick() {
+    for (const sym of state.symbols) {
+      const q = state.quotes[sym]; if (!q) continue;
+      update(sym, q.price * (1 + (Math.random() - 0.5) * 0.004));
+    }
+  }
+
+  // ---------- Live feed: Finnhub /quote polling ----------
+  async function fetchQuote(sym) {
+    const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(state.key)}`);
+    if (r.status === 401 || r.status === 403) throw new Error("key");
+    if (!r.ok) throw new Error("http " + r.status);
+    const d = await r.json();
+    if (!d || !d.c) throw new Error("nosym");
+    const q = state.quotes[sym] || (state.quotes[sym] = { hist: [] });
+    Object.assign(q, { open: d.o, high: d.h, low: d.l, prev: d.pc });
+    update(sym, d.c);
+  }
+  async function liveTick() {
+    for (const sym of state.symbols) {
+      try { await fetchQuote(sym); }
+      catch (e) {
+        if (e.message === "nosym") { toast(`No quote found for ${sym}.`); continue; }
+        fallBackToDemo(e.message === "key" ? "Finnhub rejected that API key." : "Live quotes couldn't be reached from this page.");
+        return;
+      }
+    }
+  }
+
+  function update(sym, price) {
+    const q = state.quotes[sym]; if (!q) return;
+    const last = q.price;
+    q.price = price;
+    q.high = Math.max(q.high ?? price, price);
+    q.low = Math.min(q.low ?? price, price);
+    q.hist.push({ t: Date.now(), p: price });
+    if (q.hist.length > 400) q.hist.shift();
+    q.flash = last == null ? "" : price > last ? "up" : price < last ? "down" : "";
+    checkAlerts(sym, price);
+  }
+
+  function checkAlerts(sym, price) {
+    const list = state.alerts[sym] || [];
+    let changed = false;
+    for (const a of list) {
+      if (a.hit) continue;
+      if ((a.dir === "above" && price >= a.price) || (a.dir === "below" && price <= a.price)) {
+        a.hit = true; changed = true;
+        toast(`${sym} is ${a.dir} ${fmt(a.price)}, now ${fmt(price)}.`);
+      }
+    }
+    if (changed) store.set("alerts", state.alerts);
+  }
+
+  // ---------- Mode switching ----------
+  let timer = null;
+  function startDemo() {
+    clearInterval(timer);
+    state.mode = "demo";
+    state.quotes = {};
+    state.symbols.forEach(seedDemo);
+    timer = setInterval(() => { demoTick(); render(); }, 3000);
+    setMode(); render();
+  }
+  async function startLive() {
+    clearInterval(timer);
+    state.mode = "live";
+    state.quotes = {};
+    setMode(); render();
+    await liveTick(); render();
+    if (state.mode !== "live") return;
+    // 5 symbols every 20s stays far under the 60 calls/min free limit.
+    timer = setInterval(async () => { await liveTick(); render(); }, 20000);
+  }
+  function fallBackToDemo(why) {
+    toast(why + " Showing demo data.");
+    startDemo();
+    $("notice").innerHTML = `<strong>Demo mode.</strong> ${esc(why)} If you opened this inside a hosted preview, save the file and open it in your browser instead, where live requests are allowed.`;
+  }
+  function setMode() {
+    const live = state.mode === "live";
+    $("srcPill").className = "pill " + (live ? "live" : "demo");
+    $("srcPill").textContent = live ? "Live · Finnhub" : "Demo data";
+    $("notice").hidden = live;
+    if (!live) $("notice").innerHTML = "<strong>Demo mode.</strong> Prices are simulated so you can try the watchlist, charts and alerts. Switch to live quotes under Data source.";
+  }
+
+  // ---------- Rendering ----------
+  function sparkPath(hist, w, h, pad = 2) {
+    if (hist.length < 2) return "";
+    const ps = hist.map((x) => x.p), lo = Math.min(...ps), hi = Math.max(...ps), span = hi - lo || 1;
+    return hist.map((x, i) => `${i ? "L" : "M"}${(pad + (i / (hist.length - 1)) * (w - pad * 2)).toFixed(1)},${(pad + (1 - (x.p - lo) / span) * (h - pad * 2)).toFixed(1)}`).join("");
+  }
+
+  function renderRows() {
+    const rows = $("rows");
+    if (!state.symbols.length) { rows.innerHTML = '<div class="empty">Your watchlist is empty. Add a ticker above to start tracking it.</div>'; return; }
+    rows.innerHTML = state.symbols.map((sym) => {
+      const q = state.quotes[sym] || {};
+      const ch = q.price != null && q.prev ? q.price - q.prev : null;
+      const pct = ch != null ? (ch / q.prev) * 100 : null;
+      const cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
+      const alerts = state.alerts[sym] || [];
+      const hit = alerts.some((a) => a.hit);
+      const bell = alerts.length ? `<span class="bell${hit ? " hit" : ""}" title="${alerts.length} alert(s)">${hit ? "HIT" : "ALERT"}</span>` : "";
+      return `<div class="row${sym === state.selected ? " sel" : ""}" data-sym="${esc(sym)}" tabindex="0" role="button" aria-pressed="${sym === state.selected}">
+        <div><div class="sym">${esc(sym)} ${bell}</div><div class="sub">${q.price == null ? "Loading…" : "Prev close " + fmt(q.prev)}</div></div>
+        <svg class="spark" viewBox="0 0 84 28" aria-hidden="true"><path d="${sparkPath(q.hist || [], 84, 28)}" fill="none" stroke="${cls === "down" ? "var(--down)" : "var(--up)"}" stroke-width="1.5"/></svg>
+        <div><div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}</div><div class="chg ${cls}" style="text-align:right">${ch == null ? "" : sign(ch) + " · " + sign(pct) + "%"}</div></div>
+      </div>`;
+    }).join("");
+  }
+
+  function chartSVG(hist, prev) {
+    const W = 640, H = 260, L = 8, R = 56, T = 12, B = 26;
+    if (hist.length < 2) return `<svg class="chart" viewBox="0 0 ${W} ${H}"><text x="${W / 2}" y="${H / 2}" text-anchor="middle">Collecting prices…</text></svg>`;
+    const ps = hist.map((x) => x.p).concat(prev ? [prev] : []);
+    let lo = Math.min(...ps), hi = Math.max(...ps);
+    const padv = (hi - lo) * 0.08 || hi * 0.002; lo -= padv; hi += padv;
+    const t0 = hist[0].t, t1 = hist[hist.length - 1].t, tspan = t1 - t0 || 1;
+    const x = (t) => L + ((t - t0) / tspan) * (W - L - R);
+    const y = (p) => T + (1 - (p - lo) / (hi - lo)) * (H - T - B);
+    const line = hist.map((h, i) => `${i ? "L" : "M"}${x(h.t).toFixed(1)},${y(h.p).toFixed(1)}`).join("");
+    const area = `${line}L${x(t1).toFixed(1)},${H - B}L${x(t0).toFixed(1)},${H - B}Z`;
+    const last = hist[hist.length - 1];
+    const up = prev ? last.p >= prev : true;
+    const col = up ? "var(--up)" : "var(--down)";
+    // 4 evenly spaced price gridlines with labels at real values
+    let grid = "";
+    for (let i = 0; i <= 3; i++) {
+      const v = lo + ((hi - lo) * i) / 3, yy = y(v);
+      grid += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${W - R + 6}" y="${yy + 4}">${fmt(v)}</text>`;
+    }
+    const tf = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const prevLine = prev && prev >= lo && prev <= hi ? `<line x1="${L}" x2="${W - R}" y1="${y(prev)}" y2="${y(prev)}" stroke="var(--muted)" stroke-dasharray="3 4"/><text x="${L + 4}" y="${y(prev) - 5}">prev close</text>` : "";
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Price chart">
+      <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".22"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+      ${grid}${prevLine}
+      <path d="${area}" fill="url(#g)"/>
+      <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${x(last.t)}" cy="${y(last.p)}" r="4" fill="${col}"/>
+      <text x="${L}" y="${H - 6}">${tf(t0)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${tf(t1)}</text>
+    </svg>`;
+  }
+
+  function renderDetail() {
+    const d = $("detail"), sym = state.selected;
+    if (!sym) { d.innerHTML = '<div class="empty">Pick a ticker from your watchlist to see its chart and set price alerts.</div>'; return; }
+    const q = state.quotes[sym] || { hist: [] };
+    const ch = q.price != null && q.prev ? q.price - q.prev : null;
+    const cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
+    const alerts = state.alerts[sym] || [];
+    // keep typed alert value across re-renders
+    const typed = $("alertPrice")?.value ?? "", dir = $("alertDir")?.value ?? "above";
+    const focused = document.activeElement?.id;
+    d.innerHTML = `
+      <div class="dhead">
+        <div><h2 style="font-size:1.4rem">${esc(sym)}</h2><div class="sub">${state.mode === "live" ? "Live quote, refreshed every 20 seconds" : "Simulated session"}</div></div>
+        <div style="text-align:right"><div class="big">${fmt(q.price)}</div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "% today"}</div></div>
+      </div>
+      ${chartSVG(q.hist, q.prev)}
+      <div class="stats">
+        <div class="stat"><div class="k">Open</div><div class="v">${fmt(q.open)}</div></div>
+        <div class="stat"><div class="k">Day high</div><div class="v">${fmt(q.high)}</div></div>
+        <div class="stat"><div class="k">Day low</div><div class="v">${fmt(q.low)}</div></div>
+        <div class="stat"><div class="k">Prev close</div><div class="v">${fmt(q.prev)}</div></div>
+      </div>
+      <div class="alerts">
+        <h2>Price alerts</h2>
+        <form id="alertForm" class="alert-form">
+          <select id="alertDir" aria-label="Direction"><option value="above">Goes above</option><option value="below">Goes below</option></select>
+          <input id="alertPrice" type="number" step="0.01" min="0" placeholder="${fmt(q.price)}" aria-label="Alert price">
+          <button class="primary" type="submit">Add alert</button>
+          <button id="removeSym" type="button">Remove ${esc(sym)}</button>
+        </form>
+        <ul class="alert-list">${alerts.length ? alerts.map((a, i) => `<li class="${a.hit ? "hit" : ""}"><span>${a.dir === "above" ? "≥" : "≤"} ${fmt(a.price)}${a.hit ? " · triggered" : ""}</span><button class="x" data-del="${i}" aria-label="Delete alert">✕</button></li>`).join("") : '<li><span class="sub">No alerts yet. You’ll get a notice here when the price crosses one.</span></li>'}</ul>
+      </div>`;
+    $("alertPrice").value = typed; $("alertDir").value = dir;
+    if (focused && $(focused)) $(focused).focus();
+  }
+
+  function render() { renderRows(); renderDetail(); }
+
+  function toast(msg) {
+    const el = document.createElement("div");
+    el.className = "toast"; el.textContent = msg;
+    $("toasts").appendChild(el);
+    setTimeout(() => el.remove(), 6000);
+  }
+
+  // ---------- Events ----------
+  $("rows").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) { state.selected = r.dataset.sym; render(); } });
+  $("rows").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); state.selected = e.target.dataset.sym; render(); } });
+
+  $("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const sym = $("addInput").value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+    if (!sym) return;
+    if (state.symbols.includes(sym)) { toast(`${sym} is already on your watchlist.`); return; }
+    state.symbols.push(sym); store.set("symbols", state.symbols);
+    state.selected = sym; $("addInput").value = "";
+    if (state.mode === "demo") seedDemo(sym);
+    else { state.quotes[sym] = { hist: [] }; fetchQuote(sym).then(render).catch(() => toast(`Couldn't load a quote for ${sym}.`)); }
+    render();
+  });
+
+  $("detail").addEventListener("submit", (e) => {
+    if (e.target.id !== "alertForm") return;
+    e.preventDefault();
+    const price = parseFloat($("alertPrice").value);
+    if (!(price > 0)) { toast("Enter a price above zero for the alert."); return; }
+    const sym = state.selected;
+    (state.alerts[sym] ||= []).push({ dir: $("alertDir").value, price, hit: false });
+    store.set("alerts", state.alerts);
+    $("alertPrice").value = "";
+    toast(`Alert set: ${sym} ${$("alertDir").value} ${fmt(price)}.`);
+    const q = state.quotes[sym]; if (q?.price != null) checkAlerts(sym, q.price);
+    render();
+  });
+  $("detail").addEventListener("click", (e) => {
+    const del = e.target.closest("[data-del]");
+    if (del) { state.alerts[state.selected].splice(+del.dataset.del, 1); store.set("alerts", state.alerts); render(); return; }
+    if (e.target.id === "removeSym") {
+      const sym = state.selected;
+      state.symbols = state.symbols.filter((s) => s !== sym); delete state.quotes[sym]; delete state.alerts[sym];
+      store.set("symbols", state.symbols); store.set("alerts", state.alerts);
+      state.selected = state.symbols[0] || null; render();
+    }
+  });
+
+  $("settingsBtn").addEventListener("click", () => { $("settings").hidden = !$("settings").hidden; $("keyInput").value = state.key; });
+  $("keyForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const k = $("keyInput").value.trim();
+    if (!k) { toast("Paste your Finnhub API key first."); return; }
+    state.key = k; store.set("key", k); $("settings").hidden = true; startLive();
+  });
+  $("demoBtn").addEventListener("click", () => { state.key = ""; store.set("key", ""); $("settings").hidden = true; startDemo(); });
+
+  state.key ? startLive() : startDemo();
+})();
+</script>
+
+</html>
