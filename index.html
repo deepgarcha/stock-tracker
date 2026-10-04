@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Ticker Desk</title>
+<title>Deep Stock Desk</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -55,7 +55,7 @@ a { color: inherit; }
 
 /* Top bar */
 .top { display: flex; align-items: center; gap: 16px; padding-inline: 16px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
-h1 { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; margin: 0; white-space: nowrap; }
+h1 { font: 800 1.05rem/1 var(--display); letter-spacing: 0.04em; margin: 0; white-space: nowrap; }
 .tabs { display: flex; align-items: stretch; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 16px 12px 14px; white-space: nowrap; color: var(--muted); font-weight: 500; display: flex; align-items: center; gap: 6px; }
 .tab:hover { color: var(--fg); border-bottom-color: var(--line); }
@@ -171,6 +171,16 @@ button.pill { cursor: pointer; }
 .drawer label { font-size: 0.82rem; font-weight: 600; display: grid; gap: 4px; }
 .drawer label input { font-family: var(--mono); font-weight: 400; }
 .key-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.emails { display: flex; flex-wrap: wrap; gap: 6px; }
+.email-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.82rem; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.email-chip button { border: 0; background: none; color: inherit; padding: 0 6px; }
+.email-add { display: flex; gap: 8px; }
+.email-add input { flex: 1; }
+.drawer details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.drawer summary { cursor: pointer; font-size: 0.87rem; font-weight: 600; }
+.drawer ol { margin: 8px 0 0; padding-left: 20px; font-size: 0.84rem; color: var(--muted); display: grid; gap: 4px; }
+.drawer code { font-family: var(--mono); font-size: 0.8rem; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.status-line { font-size: 0.82rem; }
 .tab-edit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .tab-edit .meta { grid-column: 1 / -1; font-size: 0.78rem; color: var(--muted); margin-top: -4px; }
 
@@ -206,7 +216,7 @@ button.pill { cursor: pointer; }
 </head><body>
 <div class="app">
   <header class="top">
-    <h1>Ticker Desk</h1>
+    <h1>DEEP STOCK DESK</h1>
     <nav id="tabs" class="tabs" role="tablist" aria-label="Stock groups"></nav>
     <div class="top-right">
       <button id="srcPill" class="pill demo" type="button">Demo</button>
@@ -254,6 +264,35 @@ button.pill { cursor: pointer; }
           <button id="demoBtn" type="button">Use demo data</button>
         </div>
       </form>
+    </section>
+
+    <section>
+      <h3>Email alerts <span id="emailPill" class="pill demo">Off</span></h3>
+      <p>When a price alert triggers, an email goes to every address below. Emails send while this page is open in a browser tab, and only for live prices, never demo data.</p>
+      <div id="emailList" class="emails"></div>
+      <form id="emailForm" class="email-add">
+        <input id="emailInput" type="text" inputmode="email" placeholder="name@example.com, another@example.com" autocomplete="email" aria-label="Email addresses">
+        <button type="submit">Add</button>
+      </form>
+      <details id="ejsBox">
+        <summary>Email sending setup (EmailJS, free)</summary>
+        <ol>
+          <li>Create a free account at <a href="https://dashboard.emailjs.com/sign-up" target="_blank" rel="noopener">emailjs.com</a> (200 emails a month).</li>
+          <li>Under <b>Email Services</b>, connect your Gmail or Outlook and copy the <b>Service ID</b>.</li>
+          <li>Under <b>Email Templates</b>, create a template. Set <b>To Email</b> to <code>{{to_email}}</code>, <b>Subject</b> to <code>{{subject}}</code>, and the body to <code>{{message}}</code>. Copy the <b>Template ID</b>.</li>
+          <li>Under <b>Account</b>, copy your <b>Public Key</b>, paste all three below, and send a test.</li>
+        </ol>
+        <div style="display:grid;gap:10px;margin-top:12px">
+          <label>Service ID<input id="ejsService" autocomplete="off" placeholder="service_xxxxxxx"></label>
+          <label>Template ID<input id="ejsTemplate" autocomplete="off" placeholder="template_xxxxxxx"></label>
+          <label>Public key<input id="ejsKey" autocomplete="off" placeholder="Your EmailJS public key"></label>
+        </div>
+      </details>
+      <div class="key-actions">
+        <button id="saveEmail" class="primary" type="button">Save email settings</button>
+        <button id="testEmail" type="button">Send test email</button>
+      </div>
+      <div id="emailStatus" class="status-line" role="status"></div>
     </section>
 
     <section>
@@ -344,7 +383,8 @@ button.pill { cursor: pointer; }
     history: {},         // `${sym}|${range}|${source}` -> { status, points: [{t, p}], error }
     info: {},            // sym -> { status, metric, profile, news, newsStatus }
     addingTab: false,
-    confirmDelete: null
+    confirmDelete: null,
+    email: Object.assign({ to: [], service: "", template: "", key: "" }, store.get("email", {}))
   };
   if (!RANGES.some((r) => r.id === state.range)) state.range = "YTD";
   if (!state.tabs.some((t) => t.id === state.activeTab)) state.activeTab = state.tabs[0].id;
@@ -543,9 +583,50 @@ button.pill { cursor: pointer; }
       if ((a.dir === "above" && price >= a.price) || (a.dir === "below" && price <= a.price)) {
         a.hit = true; changed = true;
         toast(`${sym} is ${a.dir} ${fmt(a.price)}, now ${fmt(price)}.`);
+        emailAlert(sym, a, price);
       }
     }
     if (changed) store.set("alerts", state.alerts);
+  }
+
+  // ---------- Email alerts (EmailJS REST API, called from the browser) ----------
+  const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+  const emailReady = () => state.email.to.length && state.email.service && state.email.template && state.email.key;
+  async function sendEmail(to, subject, message) {
+    const r = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service_id: state.email.service, template_id: state.email.template, user_id: state.email.key,
+        template_params: { to_email: to, subject, message } })
+    });
+    if (!r.ok) throw new Error((await r.text().catch(() => "")) || "HTTP " + r.status);
+  }
+  async function sendToAll(subject, message) {
+    const res = await Promise.allSettled(state.email.to.map((to) => sendEmail(to, subject, message)));
+    const failed = res.filter((x) => x.status === "rejected");
+    return { sent: res.length - failed.length, failed: failed.length, error: failed[0]?.reason?.message };
+  }
+  async function emailAlert(sym, a, price) {
+    if (!emailReady() || !live()) return;   // never email about simulated demo prices
+    const name = nameOf(sym);
+    const subject = `${sym} is ${a.dir} ${fmt(a.price)}`;
+    const message = `${sym}${name ? " (" + name + ")" : ""} is now ${fmt(price)}, ${a.dir} your alert price of ${fmt(a.price)}.\n\nTime: ${new Date().toLocaleString()}\nData: ${live() ? "live quote from Finnhub" : "simulated demo price"}\n\nSent by Deep Stock Desk.`;
+    const r = await sendToAll(subject, message);
+    toast(r.failed ? `Couldn't email the ${sym} alert to ${r.failed} address${r.failed > 1 ? "es" : ""}. Check email settings.` : `Emailed the ${sym} alert to ${r.sent} address${r.sent > 1 ? "es" : ""}.`);
+  }
+  function renderEmail() {
+    $("emailList").innerHTML = state.email.to.length
+      ? state.email.to.map((e, i) => `<span class="email-chip">${esc(e)}<button type="button" data-rm-email="${i}" aria-label="Remove ${esc(e)}">✕</button></span>`).join("")
+      : '<span class="note">No email addresses yet.</span>';
+    const on = emailReady();
+    $("emailPill").className = "pill " + (on ? "live" : "demo");
+    $("emailPill").textContent = on ? "On" : "Off";
+  }
+  function addEmails(text) {
+    const parts = text.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+    const bad = parts.filter((x) => !EMAIL_RE.test(x));
+    for (const e of parts.filter((x) => EMAIL_RE.test(x))) if (!state.email.to.some((y) => y.toLowerCase() === e.toLowerCase())) state.email.to.push(e);
+    store.set("email", state.email); renderEmail();
+    return bad;
   }
 
   // ---------- Mode switching ----------
@@ -1076,7 +1157,11 @@ button.pill { cursor: pointer; }
   if (window.ResizeObserver) new ResizeObserver(() => drawChart()).observe($("center"));
 
   // ---------- Settings ----------
-  function openSettings() { state.confirmDelete = null; $("keyInput").value = state.key; $("tdKeyInput").value = state.tdKey; renderSettings(); $("settings").hidden = false; $("closeSettings").focus(); }
+  function openSettings() {
+    state.confirmDelete = null; $("keyInput").value = state.key; $("tdKeyInput").value = state.tdKey;
+    $("ejsService").value = state.email.service; $("ejsTemplate").value = state.email.template; $("ejsKey").value = state.email.key;
+    $("ejsBox").open = !(state.email.service && state.email.template && state.email.key);
+    $("emailStatus").textContent = ""; renderEmail(); renderSettings(); $("settings").hidden = false; $("closeSettings").focus(); }
   function closeSettings() { $("settings").hidden = true; $("settingsBtn").focus(); }
   function renderSettings() {
     $("tabEdits").innerHTML = state.tabs.map((t) => `
@@ -1122,6 +1207,35 @@ button.pill { cursor: pointer; }
       toast(`Deleted ${t.name}.`);
     }
   });
+  $("emailForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const bad = addEmails($("emailInput").value);
+    $("emailInput").value = bad.join(", ");
+    $("emailStatus").textContent = bad.length ? `Not a valid email: ${bad.join(", ")}` : "";
+  });
+  $("emailList").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-rm-email]"); if (!b) return;
+    state.email.to.splice(+b.dataset.rmEmail, 1); store.set("email", state.email); renderEmail();
+  });
+  function saveEmailSettings() {
+    if ($("emailInput").value.trim()) { const bad = addEmails($("emailInput").value); $("emailInput").value = bad.join(", "); if (bad.length) { $("emailStatus").textContent = `Not a valid email: ${bad.join(", ")}`; return false; } }
+    state.email.service = $("ejsService").value.trim(); state.email.template = $("ejsTemplate").value.trim(); state.email.key = $("ejsKey").value.trim();
+    store.set("email", state.email); renderEmail();
+    if (!state.email.to.length) { $("emailStatus").textContent = "Add at least one email address."; return false; }
+    if (!emailReady()) { $("emailStatus").textContent = "Saved. Fill in the three EmailJS fields to start sending."; $("ejsBox").open = true; return false; }
+    $("emailStatus").textContent = `Saved. Alerts will be emailed to ${state.email.to.length} address${state.email.to.length > 1 ? "es" : ""}.`;
+    return true;
+  }
+  $("saveEmail").addEventListener("click", saveEmailSettings);
+  $("testEmail").addEventListener("click", async () => {
+    if (!saveEmailSettings()) return;
+    const btn = $("testEmail"); btn.disabled = true; $("emailStatus").textContent = "Sending test email…";
+    try {
+      const r = await sendToAll("Test from Deep Stock Desk", "This is a test. Price alerts from Deep Stock Desk will arrive like this.");
+      $("emailStatus").textContent = r.failed ? `Sent to ${r.sent}, failed for ${r.failed}. EmailJS said: ${r.error}` : `Test email sent to ${r.sent} address${r.sent > 1 ? "es" : ""}. Check your inbox.`;
+    } finally { btn.disabled = false; }
+  });
+
   $("newTabFromSettings").addEventListener("click", () => { closeSettings(); state.addingTab = true; renderTabs(); $("newTabInput").focus(); });
 
   saveTabs();
