@@ -157,6 +157,16 @@ button.pill { cursor: pointer; }
 .news p { margin: 0; font-size: 0.82rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .note { font-size: 0.85rem; color: var(--muted); margin: 0; }
 .note a { color: var(--accent); }
+.ask-form { display: flex; gap: 8px; }
+.ask-form input { flex: 1; }
+.ask-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ask-suggest button { font-size: 0.78rem; padding: 4px 10px; border-radius: 999px; color: var(--muted); }
+.qa { display: grid; gap: 10px; margin-top: 12px; max-height: 420px; overflow-y: auto; }
+.qa .q { font-weight: 600; font-size: 0.86rem; }
+.qa .a { font-size: 0.86rem; line-height: 1.55; white-space: pre-wrap; background: var(--bg); border-radius: 10px; padding: 10px 12px; overflow-wrap: anywhere; }
+.qa .a.err { color: var(--down); }
+.ask-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.74rem; color: var(--muted); }
+.ask-foot button { font-size: 0.78rem; padding: 3px 10px; }
 .skeleton { height: 12px; border-radius: 4px; background: var(--bg); margin: 10px 0; }
 
 /* Settings drawer */
@@ -255,12 +265,16 @@ button.pill { cursor: pointer; }
           <input id="keyInput" type="password" placeholder="Finnhub API key" autocomplete="off">
         </label>
         <p>Sign up at <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io</a>. Free plan: 60 requests a minute.</p>
+        <label>Anthropic API key · "Ask about this stock" answers from Claude
+          <input id="aiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off">
+        </label>
+        <p>Create one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Pay-as-you-go; a typical question costs about a cent. The key is only sent to Anthropic.</p>
         <label>Twelve Data key · history charts (1D to All)
           <input id="tdKeyInput" type="password" placeholder="Twelve Data API key" autocomplete="off">
         </label>
         <p>Sign up at <a href="https://twelvedata.com/register" target="_blank" rel="noopener">twelvedata.com</a>. Free plan: 800 requests a day, 8 a minute. Finnhub's free plan doesn't include price history, so charts use this one.</p>
         <div class="key-actions">
-          <button class="primary" type="submit">Save and go live</button>
+          <button class="primary" type="submit">Save keys</button>
           <button id="demoBtn" type="button">Use demo data</button>
         </div>
       </form>
@@ -378,6 +392,8 @@ button.pill { cursor: pointer; }
     selected: null,
     key: store.get("key", ""),
     tdKey: store.get("tdkey", ""),
+    aiKey: store.get("aikey", ""),
+    ask: {},             // sym -> { messages: [...], busy, error }
     mode: "demo",
     quotes: {},          // sym -> { price, open, high, low, prev, hist: [{t, p}] }  (hist = today's ticks)
     history: {},         // `${sym}|${range}|${source}` -> { status, points: [{t, p}], error }
@@ -886,9 +902,132 @@ button.pill { cursor: pointer; }
   const ago = (sec) => { const s = Date.now() / 1000 - sec; return s < 3600 ? Math.max(1, Math.round(s / 60)) + "m ago" : s < 86400 ? Math.round(s / 3600) + "h ago" : Math.round(s / 86400) + "d ago"; };
   const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "#";
 
+  // ---------- Ask Claude about the selected stock ----------
+  const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.131.0/+esm";
+  let anthropicClient = null, clientKey = "";
+  async function getClient() {
+    if (anthropicClient && clientKey === state.aiKey) return anthropicClient;
+    const { default: Anthropic } = await import(SDK_URL);
+    anthropicClient = new Anthropic({ apiKey: state.aiKey, dangerouslyAllowBrowser: true });
+    clientKey = state.aiKey;
+    return anthropicClient;
+  }
+  function stockContext(sym) {
+    const q = state.quotes[sym] || {}, info = state.info[sym] || {};
+    const demo = !live();
+    const lines = [`Ticker: ${sym}${nameOf(sym) ? " (" + nameOf(sym) + ")" : ""}`, `Today's date: ${new Date().toDateString()}`];
+    if (demo) lines.push("NOTE: the app is in demo mode, so every price and stat below is SIMULATED, not real market data. Say so if the user relies on these numbers, and answer from your general knowledge instead.");
+    lines.push(`Quote: price ${fmt(q.price)}, open ${fmt(q.open)}, day high ${fmt(q.high)}, day low ${fmt(q.low)}, previous close ${fmt(q.prev)}`);
+    const stats = demo ? demoStats(sym) : info.status === "ok" ? liveStats(info, sym) : null;
+    if (stats) lines.push("Key stats: " + Object.entries(stats).map(([k, v]) => `${k} ${v}`).join("; "));
+    const p = info.profile;
+    if (p) lines.push(`Profile: industry ${p.finnhubIndustry || "?"}, exchange ${p.exchange || "?"}, country ${p.country || "?"}, IPO ${p.ipo || "?"}`);
+    for (const r of [state.range, "YTD", "1Y"]) {
+      const h = state.history[histKey(sym, r)];
+      if (h?.status === "ok" && h.points?.length > 1) {
+        const ps = h.points.map((x) => x.p);
+        lines.push(`${r} price history: start ${fmt(ps[0])} on ${new Date(h.points[0].t).toDateString()}, latest ${fmt(ps[ps.length - 1])}, high ${fmt(Math.max(...ps))}, low ${fmt(Math.min(...ps))}`);
+      }
+    }
+    if (info.news?.length) lines.push("Recent news (newest first):\n" + info.news.slice(0, 8).map((a) => `- ${new Date(a.datetime * 1000).toDateString()} · ${a.source}: ${a.headline}${a.summary ? " — " + a.summary.slice(0, 280) : ""}`).join("\n"));
+    return lines.join("\n");
+  }
+  async function ask(sym, question) {
+    question = question.trim();
+    if (!question) return;
+    if (!state.aiKey) { openSettings(); $("aiKeyInput").focus(); toast("Add your Anthropic API key to ask questions."); return; }
+    const conv = state.ask[sym] ||= { messages: [] };
+    if (conv.busy) return;
+    const history = conv.messages.filter((m) => m.content && !m.failed).map(({ role, content }) => ({ role, content }));
+    conv.messages.push({ role: "user", content: question }, { role: "assistant", content: "" });
+    const answer = conv.messages[conv.messages.length - 1];
+    conv.busy = true; conv.error = "";
+    renderAsk(true);
+    try {
+      const client = await getClient();
+      const stream = client.beta.messages.stream({
+        model: "claude-opus-5-5",
+        max_tokens: 4000,
+        output_config: { effort: "low" },
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        system: "You are a stock research assistant inside a personal stock tracker. Answer the user's question about the stock using the data provided, plus your general knowledge where useful. Be concise: a few short paragraphs or bullets, plain text (no markdown headings or tables). Cite the specific numbers you use. Say clearly when data is missing or stale. You are not a financial adviser: give balanced information and never tell the user to buy or sell.\n\nCurrent data for this stock:\n" + stockContext(sym),
+        messages: history.concat({ role: "user", content: question })
+      });
+      stream.on("text", (delta) => { answer.content += delta; updateLastAnswer(sym); });
+      const msg = await stream.finalMessage();
+      if (msg.stop_reason === "refusal") answer.content ||= "Claude declined to answer that one. Try rephrasing the question.";
+      if (msg.stop_reason === "max_tokens") answer.content += "\n\n(Answer cut short.)";
+    } catch (e) {
+      const status = e?.status;
+      conv.error = status === 401 ? "Anthropic rejected that API key. Check it in Settings."
+        : status === 429 ? "Too many requests right now. Wait a moment and try again."
+        : status === 400 && /credit/i.test(e?.message || "") ? "Your Anthropic account is out of credits. Add credits in the Anthropic Console."
+        : /import|module|fetch/i.test(e?.message || "") && !status ? "Couldn't reach Claude from this page. Check your connection and try again."
+        : "Claude couldn't answer: " + (e?.message || "unknown error");
+      if (!answer.content) conv.messages.splice(-2, 2, { role: "user", content: question, failed: true });
+    } finally {
+      conv.busy = false;
+      if (sym === state.selected) renderAsk(true);
+    }
+  }
+  function updateLastAnswer(sym) {
+    if (sym !== state.selected) return;
+    const els = document.querySelectorAll("#qa .a");
+    const last = els[els.length - 1], conv = state.ask[sym];
+    if (last && conv) { last.textContent = conv.messages[conv.messages.length - 1].content || "Thinking…"; $("qa").scrollTop = $("qa").scrollHeight; }
+  }
+  function renderAsk(force) {
+    const box = $("askBox"), sym = state.selected;
+    if (!box || (!force && box.dataset.sym === sym)) return;
+    const typed = box.dataset.sym === sym ? ($("askInput")?.value ?? "") : "";
+    const hadFocus = document.activeElement?.id === "askInput";
+    box.dataset.sym = sym;
+    const conv = state.ask[sym] || { messages: [] };
+    const pairs = [];
+    for (let i = 0; i < conv.messages.length; i++) {
+      const m = conv.messages[i];
+      if (m.role === "user") {
+        const a = conv.messages[i + 1]?.role === "assistant" ? conv.messages[++i] : null;
+        pairs.push(`<div class="q">${esc(m.content)}</div>` + (a ? `<div class="a">${esc(a.content || "Thinking…")}</div>` : ""));
+      }
+    }
+    const suggestions = ["Is it expensive compared with peers?", "Summarize the latest news", "What are the main risks?"];
+    box.innerHTML = `
+      <h2 class="h2">Ask about ${esc(sym)}</h2>
+      <form id="askForm" class="ask-form">
+        <input id="askInput" maxlength="500" autocomplete="off" placeholder="${state.aiKey ? "e.g. Why did it move this year?" : "Add an Anthropic key in Settings to ask"}" aria-label="Question about ${esc(sym)}" ${conv.busy ? "disabled" : ""}>
+        <button class="primary" type="submit" ${conv.busy ? "disabled" : ""}>${conv.busy ? "…" : "Ask"}</button>
+      </form>
+      ${pairs.length ? "" : `<div class="ask-suggest">${suggestions.map((t) => `<button type="button" data-suggest="${esc(t)}">${esc(t)}</button>`).join("")}</div>`}
+      ${pairs.length || conv.error ? `<div id="qa" class="qa">${pairs.join("")}${conv.error ? `<div class="a err">${esc(conv.error)}</div>` : ""}</div>` : ""}
+      <div class="ask-foot"><span>Answers by Claude, using this page's data. Not financial advice.</span>${pairs.length ? '<button type="button" id="askClear">Clear</button>' : ""}</div>`;
+    $("askInput").value = typed;
+    if ($("qa")) $("qa").scrollTop = $("qa").scrollHeight;
+    if (hadFocus || (!conv.busy && force && pairs.length)) $("askInput").focus();
+  }
+  $("right").addEventListener("submit", (e) => {
+    if (e.target.id !== "askForm") return;
+    e.preventDefault();
+    const q = $("askInput").value; $("askInput").value = "";
+    ask(state.selected, q);
+  });
+  $("right").addEventListener("click", (e) => {
+    const sug = e.target.closest("[data-suggest]");
+    if (sug) { ask(state.selected, sug.dataset.suggest); return; }
+    if (e.target.id === "askClear") { delete state.ask[state.selected]; renderAsk(true); }
+  });
+
   function renderRight() {
-    const el = $("right"), sym = state.selected;
-    if (!sym) { el.innerHTML = ""; return; }
+    const el = $("rightRest"), sym = state.selected;
+    if (!sym) { $("right").innerHTML = '<section id="askBox"></section><div id="rightRest" style="display:grid;gap:24px"></div>'; $("askBox").hidden = true; return; }
+    if (!$("askBox")) $("right").innerHTML = '<section id="askBox"></section><div id="rightRest" style="display:grid;gap:24px"></div>';
+    $("askBox").hidden = false;
+    renderAsk(false);
+    return renderRightRest();
+  }
+  function renderRightRest() {
+    const el = $("rightRest"), sym = state.selected;
     loadInfo(sym);
     const info = state.info[sym] || { status: "loading" };
     const demo = info.status === "demo";
@@ -1158,7 +1297,7 @@ button.pill { cursor: pointer; }
 
   // ---------- Settings ----------
   function openSettings() {
-    state.confirmDelete = null; $("keyInput").value = state.key; $("tdKeyInput").value = state.tdKey;
+    state.confirmDelete = null; $("keyInput").value = state.key; $("tdKeyInput").value = state.tdKey; $("aiKeyInput").value = state.aiKey;
     $("ejsService").value = state.email.service; $("ejsTemplate").value = state.email.template; $("ejsKey").value = state.email.key;
     $("ejsBox").open = !(state.email.service && state.email.template && state.email.key);
     $("emailStatus").textContent = ""; renderEmail(); renderSettings(); $("settings").hidden = false; $("closeSettings").focus(); }
@@ -1183,7 +1322,9 @@ button.pill { cursor: pointer; }
     e.preventDefault();
     const k = $("keyInput").value.trim(), td = $("tdKeyInput").value.trim();
     state.tdKey = td; store.set("tdkey", td);
-    if (!k) { toast(td ? "Saved. Live mode also needs a Finnhub key." : "Paste at least your Finnhub key first."); return; }
+    const ai = $("aiKeyInput").value.trim();
+    if (ai !== state.aiKey) { state.aiKey = ai; store.set("aikey", ai); renderAsk(true); }
+    if (!k) { toast(td || ai ? "Saved. Live prices also need a Finnhub key." : "Paste at least your Finnhub key first."); return; }
     state.key = k; store.set("key", k); closeSettings(); startLive();
     toast(td ? "Switched to live data." : "Switched to live prices. Add a Twelve Data key for history charts.");
   });
