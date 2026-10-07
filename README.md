@@ -14,3 +14,11 @@ Email alerts: in **Settings → Email alerts**, add one or more addresses and yo
 Features: tabs to group stocks, drag-and-drop ordering, range charts (1D, 5D, 1M, 6M, YTD, 1Y, 5Y, All), key stats, latest news, price alerts, and private notes per stock (saved in your browser), and a light/dark switch in the top bar.
 
 Hosted with GitHub Pages from `index.html` on `main`.
+
+## Password
+
+The published `index.html` is a password page: the desk is encrypted inside it (AES-256-GCM, key from the password via PBKDF2-SHA256, 600,000 rounds) and only unlocks in the browser with the right password. The readable source and key file are kept outside this repo. To rebuild after editing the source:
+
+    node build.mjs <source.html> <key-file> index.html
+
+To change the password: `node build.mjs --set-password "<new password>" <key-file>`, then rebuild.
