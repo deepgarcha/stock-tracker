@@ -78,7 +78,7 @@ button.pill { cursor: pointer; }
 
 /* Desk */
 .desk { display: grid; grid-template-columns: 310px minmax(280px, 320px) minmax(0, 1fr); grid-template-areas: "list chat main"; min-height: 0; }
-.side { grid-area: list; min-width: 0; overflow: hidden; }
+.side { grid-area: list; min-width: 0; position: relative; z-index: 5; }
 .content { grid-area: main; }
 .side { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
 .search { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); position: relative; }
@@ -107,14 +107,17 @@ button.pill { cursor: pointer; }
 .big .cur { font-size: 0.8rem; margin-left: 6px; }
 .empty { padding: 28px 16px; color: var(--muted); font-size: 0.9rem; }
 
-.results { position: absolute; left: 16px; right: 16px; top: calc(100% - 6px); z-index: 4; margin: 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.14); max-height: 340px; overflow-y: auto; }
-.results li { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
-.results li[aria-selected="true"], .results li:hover { background: var(--accent-soft); }
-.results .rs { font: 700 0.9rem/1.2 var(--display); }
-.results .rn { font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.results .rt { font: 0.66rem/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.results .rmsg { display: block; color: var(--muted); font-size: 0.85rem; cursor: default; }
-.results .rmsg:hover { background: none; }
+/* Search dropdown: wider than the list column so full names fit; ticker, name, then type and market. */
+.results { position: absolute; left: 16px; top: calc(100% - 6px); width: min(460px, calc(100vw - 32px)); z-index: 6; margin: 0; padding: 6px; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.18); max-height: min(70vh, 520px); overflow-y: auto; }
+.results li[data-i] { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.results li[aria-selected="true"], .results li[data-i]:hover { background: var(--accent-soft); }
+.results .rs { font: 700 0.98rem/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.results .rn { font-size: 0.92rem; line-height: 1.3; overflow-wrap: anywhere; }
+.results .rm { grid-column: 2; font-size: 0.74rem; color: var(--muted); }
+.results .rin { grid-row: 1 / span 2; grid-column: 3; font: 500 0.62rem/1 var(--mono); color: var(--up); border: 1px solid currentColor; border-radius: 4px; padding: 3px 5px; text-transform: uppercase; letter-spacing: .05em; }
+.results mark { background: none; color: var(--accent); font-weight: 700; }
+.results .rgroup { font: 500 0.66rem/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; padding: 12px 10px 6px; }
+.results .rmsg { color: var(--muted); font-size: 0.85rem; padding: 8px 10px; }
 
 /* Middle + right */
 .content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); min-height: 0; }
@@ -1335,15 +1338,46 @@ button.pill { cursor: pointer; }
     return COMPANIES.map((c) => [score(c), c]).filter(([n]) => n < 9).sort((a, b) => a[0] - b[0]).slice(0, 8)
       .map(([, [symbol, name]]) => ({ symbol, name, type: "" }));
   }
+  // Finnhub's free plan quotes US listings only, so US common stocks and funds rank first; warrants, rights and units are dropped.
+  const MARKETS = { TO: "Toronto", V: "TSX Venture", NE: "Cboe Canada", L: "London", DE: "Xetra", F: "Frankfurt", PA: "Paris", AS: "Amsterdam", BR: "Brussels", MI: "Milan", MC: "Madrid", SW: "Swiss", ST: "Stockholm", CO: "Copenhagen", OL: "Oslo", HE: "Helsinki", HK: "Hong Kong", T: "Tokyo", SS: "Shanghai", SZ: "Shenzhen", KS: "Korea", KQ: "KOSDAQ", TW: "Taiwan", SI: "Singapore", AX: "Australia", NZ: "New Zealand", NS: "India NSE", BO: "India BSE", SA: "São Paulo", MX: "Mexico", JK: "Jakarta", BK: "Bangkok", IS: "Istanbul", TA: "Tel Aviv", JO: "Johannesburg", VI: "Vienna", WA: "Warsaw", IR: "Dublin", LS: "Lisbon" };
+  const TYPE_LABEL = { "Common Stock": "Stock", ETP: "ETF", ADR: "ADR", REIT: "REIT", "Open-Ended Fund": "Fund", "Closed-End Fund": "Fund", Preference: "Preferred", NVDR: "NVDR", GDR: "GDR", "Ltd Part": "LP", MLP: "LP", Equity: "Stock" };
+  // A suffix that is not a known market (BRK.B, BF.A) is a US share class.
+  const marketOf = (sym) => { const m = /\.([A-Z]{1,3})$/.exec(sym); return m && MARKETS[m[1]] ? MARKETS[m[1]] : /^[A-Z]+(\.[A-Z])?$/.test(sym) ? "US" : m ? m[1] : "Other"; };
+  const KEEP_UPPER = new Set(["ETF", "ADR", "REIT", "SPDR", "PLC", "AG", "SA", "NV", "SE", "LP", "LLC", "USA", "US", "UK", "II", "III", "IV", "ETN", "MSCI", "ESG", "AB", "ASA", "SPA", "NYSE", "AI", "IBM", "AMD", "NXP", "ASML", "TSMC", "HP", "ARK"]);
+  const niceName = (n) => (n === n.toUpperCase() && /[A-Z]{3}/.test(n)
+    ? n.toLowerCase().replace(/[a-z0-9&.'’]+/g, (w) => { const U = w.toUpperCase(); return KEEP_UPPER.has(U.replace(/\.$/, "")) || /&|\d/.test(w) ? U : w[0].toUpperCase() + w.slice(1); })
+    : n).replace(/[- ]cl(?:ass)? ([a-z])\b/i, (_, c) => " Class " + c.toUpperCase());
   async function remoteMatches(q) {
     const d = await finnhub("search", { q });
-    return (d.result || []).filter((x) => x.symbol && x.description).slice(0, 12)
-      .map((x) => ({ symbol: x.symbol, name: x.description, type: x.type || "" }));
+    const Q = q.toUpperCase();
+    const rank = (x) => {
+      const us = marketOf(x.symbol) === "US";
+      const common = x.type === "Common Stock" || x.type === "ADR" || x.type === "ETP" || x.type === "REIT";
+      return (us ? 0 : 20) + (common ? 0 : 6) + (x.symbol === Q || x.displaySymbol === Q ? 0 : x.symbol.startsWith(Q) ? 1 : x.description.toUpperCase().startsWith(Q) ? 2 : 3);
+    };
+    return (d.result || [])
+      .filter((x) => x.symbol && x.description && !/Warrant|Right|Unit/i.test(x.type || "") && !/\b(WTS?|WARRANTS?|RIGHTS)\b/i.test(x.description))
+      .map((x, i) => ({ x, i, r: rank(x) })).sort((a, b) => a.r - b.r || a.i - b.i).slice(0, 15)
+      .map(({ x }) => ({ symbol: x.symbol, name: niceName(x.description), type: TYPE_LABEL[x.type] || x.type || "" }));
+  }
+  function mark(text, q) {
+    const i = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+    return i < 0 ? esc(text) : esc(text.slice(0, i)) + "<mark>" + esc(text.slice(i, i + q.length)) + "</mark>" + esc(text.slice(i + q.length));
   }
   function showResults(items, msg) {
     results = items; active = items.length ? 0 : -1;
-    list.innerHTML = items.map((r, i) => `<li role="option" id="opt${i}" data-i="${i}" aria-selected="${i === active}"><span class="rs">${esc(r.symbol)}</span><span class="rn">${esc(r.name)}</span><span class="rt">${esc(r.type)}</span></li>`).join("")
-      + (msg ? `<li class="rmsg" role="presentation">${esc(msg)}</li>` : "");
+    const q = input.value.trim(), here = new Set(tab().symbols);
+    let lastGroup = null;
+    list.innerHTML = items.map((r, i) => {
+      const market = r.typed ? "" : marketOf(r.symbol), group = market === "US" || !market ? "us" : "other";
+      const head = group !== lastGroup && (lastGroup || group === "other") ? `<li class="rgroup" role="presentation">${group === "us" ? "US listings" : "Other markets · prices may not load"}</li>` : "";
+      lastGroup = group;
+      const meta = r.typed ? "Add this ticker as typed" : [r.type || "Stock", market === "US" ? "US market" : market].filter(Boolean).join(" · ");
+      return head + `<li role="option" id="opt${i}" data-i="${i}" aria-selected="${i === active}">
+        <span class="rs">${mark(r.symbol, q)}</span><span class="rn">${r.typed ? "" : mark(r.name, q)}</span>
+        ${here.has(r.symbol.toUpperCase()) ? `<span class="rin" title="Already in ${esc(tab().name)}">Added</span>` : ""}
+        <span class="rm">${esc(meta)}</span></li>`;
+    }).join("") + (msg ? `<li class="rmsg" role="presentation">${esc(msg)}</li>` : "");
     list.hidden = !items.length && !msg;
     input.setAttribute("aria-expanded", String(!list.hidden));
     input.setAttribute("aria-activedescendant", active >= 0 ? "opt" + active : "");
@@ -1363,7 +1397,7 @@ button.pill { cursor: pointer; }
     if (!q) { hideResults(); return; }
     const local = localMatches(q);
     const looksLikeTicker = /^[A-Za-z.\-]{1,6}$/.test(q) && !local.some((r) => r.symbol === q.toUpperCase());
-    const typed = looksLikeTicker ? [{ symbol: q.toUpperCase(), name: "Add this ticker as typed", type: "" }] : [];
+    const typed = looksLikeTicker ? [{ symbol: q.toUpperCase(), name: "", type: "", typed: true }] : [];
     if (!live()) { showResults(local.concat(typed), local.length ? "" : "Demo mode searches popular companies. Add a Finnhub key in Settings to search every listed company."); return; }
     showResults(local, "Searching all listed companies…");
     const my = ++seq;
@@ -1406,7 +1440,7 @@ button.pill { cursor: pointer; }
   function addSymbol({ symbol, name }) {
     const sym = symbol.toUpperCase(), t = tab();
     input.value = ""; hideResults(); seq++;
-    if (name && name !== "Add this ticker as typed") { state.names[sym] = name; store.set("names", state.names); }
+    if (name) { state.names[sym] = name; store.set("names", state.names); }
     if (t.symbols.includes(sym)) { select(sym); toast(`${sym} is already in ${t.name}.`); return; }
     t.symbols.push(sym); saveTabs();
     ensureQuote(sym);
