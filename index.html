@@ -103,6 +103,9 @@ button.pill { cursor: pointer; }
 .row .sub { font-size: 0.74rem; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
 .row .px { font-size: 0.88rem; white-space: nowrap; }
 .row .chg { font-size: 0.72rem; white-space: nowrap; }
+.px.nofree { font: 500 0.7rem/1.2 var(--mono); color: var(--warn); }
+.market-note { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 10px; padding: 10px 14px; font-size: 0.86rem; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.market-note button { font-size: 0.82rem; padding: 4px 12px; }
 .cur { font: 500 0.62rem/1 var(--mono); color: var(--muted); letter-spacing: 0.04em; margin-left: 3px; }
 .big .cur { font-size: 0.8rem; margin-left: 6px; }
 .empty { padding: 28px 16px; color: var(--muted); font-size: 0.9rem; }
@@ -471,6 +474,7 @@ button.pill { cursor: pointer; }
     gemModel: store.get("gemmodel", "gemini-flash-latest"),
     notes: store.get("notes", {}),
     currency: store.get("currency", {}),
+    usAlt: store.get("usalt", {}),
     theme: store.get("theme", null),
     settingsPane: "data",
     ask: {},             // sym -> { messages: [...], busy, error }
@@ -504,7 +508,8 @@ button.pill { cursor: pointer; }
   const pct = (n) => n == null || isNaN(n) ? "—" : fmt(n) + "%";
   const tab = () => state.tabs.find((t) => t.id === state.activeTab) || state.tabs[0];
   const allSymbols = () => [...new Set(state.tabs.flatMap((t) => t.symbols))];
-  const curOf = (sym) => state.info[sym]?.profile?.currency || state.currency[sym] || "USD";
+  const SUFFIX_CUR = { TO: "CAD", V: "CAD", NE: "CAD", CN: "CAD", L: "GBP", DE: "EUR", F: "EUR", PA: "EUR", AS: "EUR", BR: "EUR", MI: "EUR", MC: "EUR", HE: "EUR", VI: "EUR", IR: "EUR", LS: "EUR", SW: "CHF", ST: "SEK", CO: "DKK", OL: "NOK", HK: "HKD", T: "JPY", SS: "CNY", SZ: "CNY", KS: "KRW", KQ: "KRW", TW: "TWD", SI: "SGD", AX: "AUD", NZ: "NZD", NS: "INR", BO: "INR", SA: "BRL", MX: "MXN" };
+  const curOf = (sym) => state.info[sym]?.profile?.currency || state.currency[sym] || SUFFIX_CUR[/\.([A-Z]{1,2})$/.exec(sym)?.[1]] || "USD";
   const nameOf = (sym) => state.names[sym] || NAME_OF[sym] || state.info[sym]?.profile?.name || "";
   const saveTabs = () => { store.set("tabs", state.tabs); store.set("activeTab", state.activeTab); };
   const live = () => state.mode === "live";
@@ -580,7 +585,8 @@ button.pill { cursor: pointer; }
   async function finnhub(path, params) {
     const qs = new URLSearchParams({ ...params, token: state.key });
     const r = await fetch(`https://finnhub.io/api/v1/${path}?${qs}`);
-    if (r.status === 401 || r.status === 403) throw new Error("key");
+    if (r.status === 401) throw new Error("key");
+    if (r.status === 403) throw new Error("noaccess"); // free plan: the key is fine, but this market or endpoint is paid
     if (r.status === 429) throw new Error("rate");
     if (!r.ok) throw new Error("http " + r.status);
     return r.json();
@@ -595,20 +601,40 @@ button.pill { cursor: pointer; }
   async function liveTick(syms) {
     for (const sym of syms) {
       if (!live()) return;
+      if (state.quotes[sym]?.restricted) continue;
       try { await fetchQuote(sym); }
       catch (e) {
         if (e.message === "nosym") { state.quotes[sym] ||= { hist: [] }; state.quotes[sym].missing = true; continue; }
+        // Finnhub's free plan quotes US listings only. A non-US stock is marked, not a reason to drop live mode for the whole desk.
+        if (e.message === "noaccess" && marketOf(sym) !== "US") { markRestricted(sym); continue; }
         if (e.message === "rate") return;
         fallBackToDemo(e.message === "key" ? "Finnhub rejected that API key." : "Live quotes couldn't be reached.");
         return;
       }
     }
   }
+  async function markRestricted(sym) {
+    const q = state.quotes[sym] ||= { hist: [] };
+    if (q.restricted) return;
+    q.restricted = true; renderRows();
+    if (sym === state.selected) renderCenter();
+    if (state.usAlt[sym] !== undefined) return;
+    // Look for the same company's US listing (many Canadian stocks also trade in New York, in USD).
+    try {
+      const name = (nameOf(sym) || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim();
+      const d = name ? await finnhub("search", { q: nameOf(sym) }) : { result: [] };
+      const alt = (d.result || []).find((x) => marketOf(x.symbol) === "US" && x.symbol !== sym && x.description.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() === name);
+      state.usAlt[sym] = alt ? alt.symbol : null;
+    } catch { state.usAlt[sym] = null; }
+    store.set("usalt", state.usAlt);
+    if (sym === state.selected) renderCenter();
+  }
   // Only the open tab is polled, so the free 60 calls/min limit covers tabs of up to about 15 stocks.
   const liveSymbols = () => [...new Set(tab().symbols.concat(state.selected ? [state.selected] : []))];
 
   async function loadInfo(sym) {
-    if (state.info[sym]?.status === "ok" || state.info[sym]?.status === "loading") return;
+    const prev = state.info[sym];
+    if (prev?.status === "ok" || prev?.status === "loading" || (prev?.status === "error" && Date.now() - prev.at < 5 * 60e3)) return;
     if (!live()) { state.info[sym] = { status: "demo" }; return; }
     const info = state.info[sym] = { status: "loading", newsStatus: "loading" };
     renderRight();
@@ -622,7 +648,7 @@ button.pill { cursor: pointer; }
     info.metric = m.status === "fulfilled" ? (m.value?.metric || {}) : null;
     info.profile = p.status === "fulfilled" ? (p.value || {}) : null;
     info.news = n.status === "fulfilled" && Array.isArray(n.value) ? n.value.sort((a, b) => b.datetime - a.datetime).slice(0, 12) : null;
-    info.status = info.metric || info.profile ? "ok" : "error";
+    info.status = info.metric || info.profile ? "ok" : "error"; info.at = Date.now();
     info.newsStatus = info.news ? "ok" : "error";
     if (info.profile?.name && !state.names[sym]) { state.names[sym] = info.profile.name; store.set("names", state.names); }
     if (info.profile?.currency && state.currency[sym] !== info.profile.currency) { state.currency[sym] = info.profile.currency; store.set("currency", state.currency); }
@@ -638,6 +664,7 @@ button.pill { cursor: pointer; }
     if (h && (h.status === "loading" || (h.status === "ok" && Date.now() - h.at < (range === "1D" || range === "5D" ? 5 * 60e3 : 60 * 60e3)))) return;
     if (k.endsWith("|demo")) { state.history[k] = { status: "ok", points: range === "1D" ? null : demoHistory(sym, range), at: Date.now() }; return; }
     if (k.endsWith("|none")) { state.history[k] = { status: range === "1D" ? "ok" : "needkey", points: null, at: Date.now() }; return; }
+    if (marketOf(sym) !== "US") { state.history[k] = { status: "error", points: null, error: `Twelve Data's free plan has US charts only, so there's no free chart for ${marketOf(sym)} listings.`, at: Date.now() }; return; }
     const entry = state.history[k] = { status: "loading" };
     const cfg = RANGES.find((r) => r.id === range).td;
     const qs = new URLSearchParams({ symbol: sym, interval: cfg.interval, apikey: state.tdKey, order: "asc" });
@@ -795,11 +822,14 @@ button.pill { cursor: pointer; }
       const alerts = state.alerts[sym] || [];
       const hit = alerts.some((a) => a.hit);
       const bell = alerts.length ? `<span class="bell${hit ? " hit" : ""}" title="${alerts.length} alert(s)">${hit ? "HIT" : "ALERT"}</span>` : "";
-      const sub = nameOf(sym) || (q.missing ? "No quote found" : q.price == null ? "Loading…" : "Prev close " + fmt(q.prev));
+      const sub = nameOf(sym) || (q.missing ? "No quote found" : q.restricted ? "No free live price" : q.price == null ? "Loading…" : "Prev close " + fmt(q.prev));
+      const priceCell = q.restricted && q.price == null
+        ? `<div class="px nofree" title="Finnhub's free plan only has US prices">No free price</div><div class="chg">${esc(marketOf(sym))}</div>`
+        : `<div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}<span class="cur">${esc(curOf(sym))}</span></div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "%"}</div>`;
       return `<div class="row${sym === state.selected ? " sel" : ""}" data-sym="${esc(sym)}" tabindex="0" role="button" aria-pressed="${sym === state.selected}" aria-label="${esc(sym)}. Alt plus arrow keys to reorder">
         <span class="grip" title="Drag to reorder">${GRIP}</span>
         <div style="min-width:0"><div class="sym">${esc(sym)} ${bell}${state.notes[sym] ? '<span class="bell note-tag" title="Has a note">NOTE</span>' : ""}</div><div class="sub">${esc(sub)}</div></div>
-        <div><div class="px ${q.flash ? "flash-" + q.flash : ""}">${fmt(q.price)}<span class="cur">${esc(curOf(sym))}</span></div><div class="chg ${cls}">${ch == null ? "" : sign(ch) + " · " + sign((ch / q.prev) * 100) + "%"}</div></div>
+        <div>${priceCell}</div>
       </div>`;
     }).join("");
     if (focusedSym) rows.querySelector(`.row[data-sym="${CSS.escape(focusedSym)}"]`)?.focus();
@@ -813,11 +843,14 @@ button.pill { cursor: pointer; }
     const typed = $("alertPrice")?.value ?? "", dir = $("alertDir")?.value ?? "above";
     const focused = document.activeElement?.id || document.activeElement?.dataset?.range;
     const inThisTab = tab().symbols.includes(sym);
+    const restricted = live() && state.quotes[sym]?.restricted, alt = state.usAlt[sym];
+    const marketNote = !restricted ? "" : `<div class="market-note" role="note"><span><b>No free live price for ${esc(sym)}.</b> Finnhub's free plan only has US prices, so ${esc(marketOf(sym))} listings can't load${alt ? `. This company also trades in the US as <b>${esc(alt)}</b>, priced in USD.` : "."}</span>${alt && !tab().symbols.includes(alt) ? `<button type="button" data-use-us="${esc(alt)}">Switch to ${esc(alt)}</button>` : ""}</div>`;
     c.innerHTML = `
       <div class="dhead">
-        <div style="min-width:0"><h2 class="dname">${esc(sym)}</h2><div class="sub">${nameOf(sym) ? esc(nameOf(sym)) + " · " : ""}${live() ? "Live quote, refreshed every 20 seconds" : "Simulated prices"}</div></div>
+        <div style="min-width:0"><h2 class="dname">${esc(sym)}</h2><div class="sub">${nameOf(sym) ? esc(nameOf(sym)) + " · " : ""}${restricted ? "No free live price" : live() ? "Live quote, refreshed every 20 seconds" : "Simulated prices"}</div></div>
         <div><div id="bigPrice" class="big"></div><div id="bigChg" class="chg"></div></div>
       </div>
+      ${marketNote}
       <div class="ranges" role="group" aria-label="Chart range">
         ${RANGES.map((r) => `<button type="button" data-range="${r.id}" aria-pressed="${r.id === state.range}">${r.id}</button>`).join("")}
         <span id="period" class="period"></span>
@@ -1370,7 +1403,7 @@ button.pill { cursor: pointer; }
     let lastGroup = null;
     list.innerHTML = items.map((r, i) => {
       const market = r.typed ? "" : marketOf(r.symbol), group = market === "US" || !market ? "us" : "other";
-      const head = group !== lastGroup && (lastGroup || group === "other") ? `<li class="rgroup" role="presentation">${group === "us" ? "US listings" : "Other markets · prices may not load"}</li>` : "";
+      const head = group !== lastGroup && (lastGroup || group === "other") ? `<li class="rgroup" role="presentation">${group === "us" ? "US listings" : "Other markets · no free live prices"}</li>` : "";
       lastGroup = group;
       const meta = r.typed ? "Add this ticker as typed" : [r.type || "Stock", market === "US" ? "US market" : market].filter(Boolean).join(" · ");
       return head + `<li role="option" id="opt${i}" data-i="${i}" aria-selected="${i === active}">
@@ -1467,6 +1500,16 @@ button.pill { cursor: pointer; }
     const rb = e.target.closest("[data-range]");
     if (rb) { state.range = rb.dataset.range; store.set("range", state.range); hoverX = null; c_ranges(); drawChart(); return; }
     if (e.target.closest("[data-open-settings]")) { openSettings("data"); return; }
+    const us = e.target.closest("[data-use-us]");
+    if (us) {
+      const alt = us.dataset.useUs, t = tab(), i = t.symbols.indexOf(sym);
+      if (i >= 0) t.symbols[i] = alt; else t.symbols.push(alt);
+      if (!state.names[alt] && nameOf(sym)) { state.names[alt] = nameOf(sym); store.set("names", state.names); }
+      if (state.notes[sym] && !state.notes[alt]) { state.notes[alt] = state.notes[sym]; store.set("notes", state.notes); }
+      saveTabs(); ensureQuote(alt); renderTabs(); select(alt); renderRows();
+      toast(`Switched ${sym} to its US listing ${alt}.`);
+      return;
+    }
     const del = e.target.closest("[data-del]");
     if (del) { state.alerts[sym].splice(+del.dataset.del, 1); store.set("alerts", state.alerts); renderRows(); renderCenter(); return; }
     const chip = e.target.closest("[data-chip]");
