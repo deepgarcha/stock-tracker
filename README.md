@@ -11,6 +11,6 @@ Ask about a stock: in **Settings → AI**, pick **Google Gemini** (free key from
 
 Email alerts: in **Settings → Email alerts**, add one or more addresses and your free [EmailJS](https://www.emailjs.com/) Service ID, Template ID and Public key (template: To = `{{to_email}}`, Subject = `{{subject}}`, body = `{{message}}`). Alerts are emailed while the page is open, for live prices only.
 
-Features: tabs to group stocks, drag-and-drop ordering, range charts (1D, 5D, 1M, 6M, YTD, 1Y, 5Y, All), key stats, latest news, and price alerts.
+Features: tabs to group stocks, drag-and-drop ordering, range charts (1D, 5D, 1M, 6M, YTD, 1Y, 5Y, All), key stats, latest news, price alerts, and private notes per stock (saved in your browser).
 
 Hosted with GitHub Pages from `index.html` on `main`.
