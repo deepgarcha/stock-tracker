@@ -661,7 +661,9 @@ button.pill { cursor: pointer; }
   async function loadHistory(sym, range) {
     const k = histKey(sym, range);
     const h = state.history[k];
-    if (h && (h.status === "loading" || (h.status === "ok" && Date.now() - h.at < (range === "1D" || range === "5D" ? 5 * 60e3 : 60 * 60e3)))) return;
+    // Errors are cached too (a minute after a rate limit, ten minutes otherwise); retrying them on every redraw looped and burned the free quota.
+    if (h && (h.status === "loading" || (h.status === "ok" && Date.now() - h.at < (range === "1D" || range === "5D" ? 5 * 60e3 : 60 * 60e3))
+      || (h.status === "error" && Date.now() - h.at < (h.rate ? 65e3 : 10 * 60e3)))) return;
     if (k.endsWith("|demo")) { state.history[k] = { status: "ok", points: range === "1D" ? null : demoHistory(sym, range), at: Date.now() }; return; }
     if (k.endsWith("|none")) { state.history[k] = { status: range === "1D" ? "ok" : "needkey", points: null, at: Date.now() }; return; }
     if (marketOf(sym) !== "US") { state.history[k] = { status: "error", points: null, error: `Twelve Data's free plan has US charts only, so there's no free chart for ${marketOf(sym)} listings.`, at: Date.now() }; return; }
@@ -673,13 +675,14 @@ button.pill { cursor: pointer; }
     try {
       const r = await fetch(`https://api.twelvedata.com/time_series?${qs}`);
       const d = await r.json();
-      if (d.status === "error") throw new Error(d.code === 401 ? "Twelve Data rejected that API key." : d.code === 429 ? "Twelve Data's free limit was reached (8 charts a minute). Try again in a minute." : d.message || "No history for this symbol.");
+      if (d.status === "error") { const err = new Error(d.code === 401 ? "Twelve Data rejected that API key. Check it in Settings." : d.code === 429 ? (/day/i.test(d.message || "") ? "Twelve Data's free daily limit (800 charts) is used up. Charts come back after midnight UTC." : "Twelve Data's free limit was reached (8 charts a minute). Trying again shortly.") : d.message || "No history for this symbol."); err.rate = d.code === 429; throw err; }
       let pts = (d.values || []).map((v) => ({ t: new Date(v.datetime.replace(" ", "T")).getTime(), p: +v.close })).filter((x) => !isNaN(x.p));
       pts.sort((a, b) => a.t - b.t);
       if (range === "1D" && pts.length) { const lastDay = new Date(pts[pts.length - 1].t).toDateString(); pts = pts.filter((x) => new Date(x.t).toDateString() === lastDay); }
       Object.assign(entry, { status: pts.length ? "ok" : "error", points: pts, error: pts.length ? "" : "No history for this symbol.", at: Date.now() });
     } catch (e) {
-      Object.assign(entry, { status: "error", error: e.message === "Failed to fetch" ? "Couldn't reach Twelve Data from this page." : e.message, at: Date.now() - 50 * 60e3 });
+      Object.assign(entry, { status: "error", error: e.message === "Failed to fetch" ? "Couldn't reach Twelve Data from this page." : e.message, rate: !!e.rate, at: Date.now() });
+      if (e.rate) setTimeout(() => { if (sym === state.selected && range === state.range) drawChart(); }, 66e3);
     }
     if (sym === state.selected && range === state.range) drawChart();
   }
